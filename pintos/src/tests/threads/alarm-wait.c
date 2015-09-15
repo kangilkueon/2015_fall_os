@@ -30,6 +30,7 @@ test_print_name(void)
   msg("Course  :  SSE3044");
   msg("ID      :  2009311752");
   msg("Name    :  Kang Il Kueon");
+  msg("test");
 }
 
 /* Information about the test. */
