@@ -30,7 +30,6 @@ test_print_name(void)
   msg("Course  :  SSE3044");
   msg("ID      :  2009311752");
   msg("Name    :  Kang Il Kueon");
-  msg("test for ssh");
 }
 
 /* Information about the test. */
