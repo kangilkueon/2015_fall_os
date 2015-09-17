@@ -198,8 +198,11 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
-  /* Add to run queue. */
   thread_unblock (t);
+  /* Add to run queue. */
+  /* 2015.09.17 Add for priority scheduling */
+ // if(t->priority >= thread_current ()->priority)
+ //   thread_yield ();
 
   return tid;
 }
@@ -237,7 +240,11 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  /* 2015.09.16. Add for priority scheduling(s) */
+  //list_push_back (&ready_list, &t->elem);
+  list_insert_ordered(&ready_list, &t->elem, &is_large_priority, NULL);
+  /* 2015.09.16. Add for priority scheduling(e) */
+
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -308,7 +315,10 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    /* 2015.09.16. Add for priority scheduling(s) */
+    list_insert_ordered(&ready_list, &cur->elem, &is_large_priority, NULL);
+    /* 2015.09.16. Add for priority scheduling(e) */
+    //list_push_back (&ready_list, &cur->elem);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -492,8 +502,9 @@ next_thread_to_run (void)
 {
   if (list_empty (&ready_list))
     return idle_thread;
-  else
+  else {
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -563,6 +574,8 @@ schedule (void)
   if (cur != next)
     prev = switch_threads (cur, next);
   thread_schedule_tail (prev);
+//int test =  cur->priority;
+//thread_foreach (&check_thread_status, NULL);
 }
 
 /* Returns a tid to use for a new thread. */
@@ -582,3 +595,16 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+bool is_large_priority(struct list_elem *e1, struct list_elem *e2, void *aux) {
+
+  struct thread *t1 = list_entry(e1, struct thread, elem);
+  struct thread *t2 = list_entry(e2, struct thread, elem);
+
+  return (t1->priority > t2->priority);
+}
+
+void check_thread_status(struct thread *t){
+  int temp = t->priority;
+  printf("##THREAD PRIORITY :: %d ( %d ) / %d \n\n",t->tid,  temp, t->status);
+}
