@@ -33,11 +33,14 @@ test_priority_condvar (void)
       thread_create (name, priority, priority_condvar_thread, NULL);
     }
 
+//msg("[0] Lock Holder :: %d (priority : %d)", lock.holder->tid, lock.holder->priority);
   for (i = 0; i < 10; i++) 
     {
       lock_acquire (&lock);
       msg ("Signaling...");
+//msg("[1] Lock Holder :: %d (priority : %d)", lock.holder->tid, lock.holder->priority);
       cond_signal (&condition, &lock);
+//msg("[3] Lock Holder :: %d (priority : %d)", lock.holder->tid, lock.holder->priority);
       lock_release (&lock);
     }
 }
@@ -47,6 +50,7 @@ priority_condvar_thread (void *aux UNUSED)
 {
   msg ("Thread %s starting.", thread_name ());
   lock_acquire (&lock);
+//msg("[2] Lock Holder :: %d (priority : %d, %d)", lock.holder->tid, lock.holder->priority, lock.holder->d_priority);
   cond_wait (&condition, &lock);
   msg ("Thread %s woke up.", thread_name ());
   lock_release (&lock);

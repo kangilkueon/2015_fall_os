@@ -240,15 +240,14 @@ thread_unblock (struct thread *t)
   /* 2015.09.16. Add for priority scheduling(s) */
   //list_push_back (&ready_list, &t->elem);
   list_insert_ordered(&ready_list, &t->elem, &is_large_priority, NULL);
-  //list_sort(&ready_list, &is_large_priority, NULL);
   /* 2015.09.16. Add for priority scheduling(e) */
 
   t->status = THREAD_READY;
   intr_set_level (old_level);
 
   /* 2015.09.17. Add for priority scheduling(s) */
-  if (thread_current() != idle_thread) {
-    if(t->priority > thread_current()->priority){
+  if (thread_current() != idle_thread && !intr_context()) {
+    if(t->priority >= thread_current()->priority){
       thread_yield();
     }
   }
@@ -483,7 +482,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  t->d_priority = priority;
+  t->d_priority = -1;//priority;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
@@ -619,4 +618,13 @@ bool is_large_priority(struct list_elem *e1, struct list_elem *e2, void *aux) {
 void check_thread_status(struct thread *t){
   int temp = t->priority;
   printf("##THREAD PRIORITY :: %d ( %d ) / %d \n\n",t->tid,  temp, t->status);
+}
+
+void refresh_thread_running(struct thread *t){
+  /* 2015.09.17. Add for priority scheduling(s) */
+  if (thread_current() != idle_thread) {
+    if(t->priority > thread_current()->priority){
+      thread_yield();
+    }
+  }
 }

@@ -68,7 +68,6 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      //list_insert_ordered(&sema->waiters, &thread_current()->elem, &is_large_priority, NULL);
       list_push_back (&sema->waiters, &thread_current ()->elem);
       thread_block ();
     }
@@ -121,7 +120,6 @@ sema_up (struct semaphore *sema)
     struct thread *t = list_entry (list_pop_front (&sema->waiters), struct thread, elem);
     thread_unblock (t);
   }
-  //thread_yield();
 }
 
 static void sema_test_helper (void *sema_);
@@ -200,22 +198,18 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  //printf("COMMING HERE::%d\n", thread_current()->tid);
-  //sema_down (&lock->semaphore);
-  // lock->holder = thread_current ();
-
   /* 2015.09.17. Add for priority donation (s) */
   struct thread *lock_holder = lock->holder;
-  //enum intr_level old_level = intr_disable();
-  int d_priority = thread_get_priority ();
   if(lock_holder != NULL){
-    //if(lock_holder->priority < d_priority) lock_holder->priority = d_priority;
-    //list_insert_ordered(waiter, &(thread_current()->elem), &is_large_priority, NULL);
+    if (lock_holder->d_priority < 0){
+      int d_priority = thread_get_priority ();
+      lock_holder->d_priority = lock_holder->priority;
+      lock_holder->priority = d_priority;
+    }
   }
+  /* 2015.09.17. Add for priority donation (e) */
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
- // intr_set_level(old_level);
-  /* 2015.09.17. Add for priority donation (e) */
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -246,7 +240,6 @@ lock_try_acquire (struct lock *lock)
 void
 lock_release (struct lock *lock) 
 {
-//printf("\n[##a :%d (%d)##]\n", thread_current()->tid, thread_get_priority());
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
@@ -254,6 +247,11 @@ lock_release (struct lock *lock)
   lock->holder = NULL;
   sema_up (&lock->semaphore);
   //thread_set_priority(thread_current()->d_priority);
+  /* 2015.09.17. (s) */
+  if(thread_current()->d_priority >= 0){
+     thread_current()->priority = thread_current()->d_priority;
+     thread_current()->d_priority = -1;
+  }
   /* 2015.09.17. (e) */
 }
 
@@ -318,8 +316,8 @@ cond_wait (struct condition *cond, struct lock *lock)
   
   sema_init (&waiter.semaphore, 0);
   // 2015.09.18. Add for priority-condvar (s)
-  list_insert_ordered(&cond->waiters, &waiter.elem, &is_large_priority_in_semaphore, NULL);
-  //list_push_back (&cond->waiters, &waiter.elem);
+  //list_insert_ordered(&cond->waiters, &waiter.elem, &is_large_priority_in_semaphore, NULL);
+  list_push_back (&cond->waiters, &waiter.elem);
   lock_release (lock);
   sema_down (&waiter.semaphore);
   lock_acquire (lock);
