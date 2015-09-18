@@ -30,11 +30,13 @@ test_priority_sema (void)
       thread_create (name, priority, priority_sema_thread, NULL);
     }
 
+
   for (i = 0; i < 10; i++) 
     {
       sema_up (&sema);
       msg ("Back in main thread."); 
     }
+
 }
 
 static void

@@ -200,9 +200,6 @@ thread_create (const char *name, int priority,
 
   thread_unblock (t);
   /* Add to run queue. */
-  /* 2015.09.17 Add for priority scheduling */
- // if(t->priority >= thread_current ()->priority)
- //   thread_yield ();
 
   return tid;
 }
@@ -243,10 +240,19 @@ thread_unblock (struct thread *t)
   /* 2015.09.16. Add for priority scheduling(s) */
   //list_push_back (&ready_list, &t->elem);
   list_insert_ordered(&ready_list, &t->elem, &is_large_priority, NULL);
+  //list_sort(&ready_list, &is_large_priority, NULL);
   /* 2015.09.16. Add for priority scheduling(e) */
 
   t->status = THREAD_READY;
   intr_set_level (old_level);
+
+  /* 2015.09.17. Add for priority scheduling(s) */
+  if (thread_current() != idle_thread) {
+    if(t->priority > thread_current()->priority){
+      thread_yield();
+    }
+  }
+  /* 2015.09.17. Add for priority scheduling(e) */
 }
 
 /* Returns the name of the running thread. */
@@ -314,11 +320,13 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) 
+  if (cur != idle_thread) { 
     /* 2015.09.16. Add for priority scheduling(s) */
     list_insert_ordered(&ready_list, &cur->elem, &is_large_priority, NULL);
+    //list_sort(&ready_list, &is_large_priority, NULL);
     /* 2015.09.16. Add for priority scheduling(e) */
     //list_push_back (&ready_list, &cur->elem);
+  }
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -346,6 +354,9 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  /* 2015.09.17. Add for test priority change, if priority is changed, it have to yield agian(s) */
+  thread_yield();
+  /* 2015.09.17. Add for test priority change, if priority is changed, it have to yield agian(e) */
 }
 
 /* Returns the current thread's priority. */
@@ -472,6 +483,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->d_priority = priority;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
@@ -600,7 +612,7 @@ bool is_large_priority(struct list_elem *e1, struct list_elem *e2, void *aux) {
 
   struct thread *t1 = list_entry(e1, struct thread, elem);
   struct thread *t2 = list_entry(e2, struct thread, elem);
-
+  
   return (t1->priority > t2->priority);
 }
 

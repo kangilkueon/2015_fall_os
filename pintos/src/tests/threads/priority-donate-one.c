@@ -32,14 +32,18 @@ test_priority_donate_one (void)
   lock_init (&lock);
   lock_acquire (&lock);
   thread_create ("acquire1", PRI_DEFAULT + 1, acquire1_thread_func, &lock);
-  msg ("This thread should have priority %d.  Actual priority: %d.",
-       PRI_DEFAULT + 1, thread_get_priority ());
+  msg ("This thread should have priority %d.  Actual priority: %d. test value: %d",
+       PRI_DEFAULT + 1, thread_get_priority (), thread_current()->d_priority);
   thread_create ("acquire2", PRI_DEFAULT + 2, acquire2_thread_func, &lock);
-  msg ("This thread should have priority %d.  Actual priority: %d.",
-       PRI_DEFAULT + 2, thread_get_priority ());
+  msg ("This thread should have priority %d.  Actual priority: %d. test value: %d",
+       PRI_DEFAULT + 2, thread_get_priority (), thread_current()->tid);
+  msg ("before main thread lock release : %d.  Actual priority: %d. test value: %d", thread_current()->tid, thread_get_priority(), thread_current()->d_priority);
+  msg("fuck::%d", lock.holder->tid);
   lock_release (&lock);
+  msg ("tid: %d.  Actual priority: %d. test value: %d", thread_current()->tid, thread_current()->priority, thread_current()->d_priority);
   msg ("acquire2, acquire1 must already have finished, in that order.");
   msg ("This should be the last line before finishing this test.");
+  msg ("This thread should have priority %d.  Actual priority: %d. test value: %d", thread_current()->priority, thread_current()->tid, thread_current()->d_priority);
 }
 
 static void
@@ -47,7 +51,10 @@ acquire1_thread_func (void *lock_)
 {
   struct lock *lock = lock_;
 
+  msg ("a1-1::%d", lock->holder->tid);
+  msg ("a1-2::%d", thread_current ()->tid);
   lock_acquire (lock);
+  msg ("a1-3::%d", lock->holder->tid);
   msg ("acquire1: got the lock");
   lock_release (lock);
   msg ("acquire1: done");
@@ -58,7 +65,10 @@ acquire2_thread_func (void *lock_)
 {
   struct lock *lock = lock_;
 
+  msg ("a2-1::%d", lock->holder->tid);
+  msg ("a2-2::%d", thread_current ()->tid);
   lock_acquire (lock);
+  msg ("a2-3::%d", thread_current ()->tid);
   msg ("acquire2: got the lock");
   lock_release (lock);
   msg ("acquire2: done");
