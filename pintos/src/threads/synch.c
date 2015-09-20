@@ -209,6 +209,17 @@ lock_acquire (struct lock *lock)
       lock_holder->priority = d_priority;
       list_insert_ordered(&lock_holder->donors, &thread_current()->donorelem, &is_large_priority, NULL); 
       thread_current()->waiting_lock = lock;
+      /* 2015.09.20 Add for priority donate nested (s) */
+      struct lock *nlock = lock_holder->waiting_lock;
+      while(nlock != NULL){
+        if(nlock->holder->priority <= thread_get_priority()){
+          if(nlock->holder->d_priority < 0) nlock->holder->d_priority = nlock->holder->priority;
+          nlock->holder->priority = thread_get_priority();
+        }
+        if(nlock->holder == NULL) break;
+        nlock = nlock->holder->waiting_lock;
+      }
+      /* 2015.09.20 Add for priority donate nested (e) */
     }
   }
   /* 2015.09.17. Add for priority donation (e) */
