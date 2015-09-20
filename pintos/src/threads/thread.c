@@ -630,8 +630,12 @@ bool is_large_priority(struct list_elem *e1, struct list_elem *e2, void *aux) {
   return (t1->priority > t2->priority);
 }
 
-void check_thread_status(struct thread *t){
-  int temp = t->priority;
-  printf("##THREAD PRIORITY :: %d ( %d ) / %d \n\n",t->tid,  temp, t->status);
+bool
+is_small_sleep_ticks(struct list_elem *e1, struct list_elem *e2, void *aux) {
+
+  struct thread *t1 = list_entry(e1, struct thread, waitingelem);
+  struct thread *t2 = list_entry(e2, struct thread, waitingelem);
+
+  return (t1->sleep_ticks < t2->sleep_ticks);
 }
 

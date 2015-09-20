@@ -97,8 +97,8 @@ timer_sleep (int64_t ticks)
   ASSERT (intr_get_level () == INTR_ON);
 
   /* 2015.09.15. Add for avoid busy-waiting(s) */
-  list_push_back(&waiting_list, &cur->waitingelem);
-  cur->sleep_ticks = ticks;
+  cur->sleep_ticks = timer_ticks() + ticks;
+  list_insert_ordered(&waiting_list, &cur->waitingelem, &is_small_sleep_ticks, NULL);
   enum intr_level old_level = intr_disable ();
   thread_block ();
   intr_set_level(old_level);
@@ -181,17 +181,19 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   struct list_elem *e;
   ticks++;
-  /* 2015.09.15. Add for avoid busy-waiting(s) */
+  thread_tick ();
+  /* 2015.09.15. Add for avoid busy-waiting(s)*/
   for ( e = list_begin(&waiting_list); e != list_end(&waiting_list); e = list_next(e)){
     struct thread *t = list_entry(e, struct thread, waitingelem);
-    /* To avoid error of waiting_list, check thread status is THREAD_BLOCKED */
     if(t->status == THREAD_BLOCKED){
-      t->sleep_ticks--;
-      /* If waiting ticks is smaller than zero, thread status will change unblock. and remove from waiting_list */
-      if(t->sleep_ticks <= 0) {
+      //t->sleep_ticks++;
+      if(t->sleep_ticks <= ticks) {
         thread_unblock (t);
-        list_remove(&t->waitingelem);
+        list_remove(e);
       }
+      else break;
+    } else {
+      list_remove(&t->waitingelem);
     }
   }
   /* 2015.09.15. Add for avoid busy-waiting(e) */
@@ -268,3 +270,4 @@ real_time_delay (int64_t num, int32_t denom)
   ASSERT (denom % 1000 == 0);
   busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000)); 
 }
+
