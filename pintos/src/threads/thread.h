@@ -90,6 +90,9 @@ struct thread
     int priority;                       /* Priority. */
     /* 2015.09.17. Add for priority donation (s) */
     int d_priority;                       /* Priority. */
+    struct lock *waiting_lock;
+    struct list donors;
+    struct list_elem donorelem;
     /* 2015.09.17. Add for priority donation (e) */
 
     struct list_elem allelem;           /* List element for all threads list. */
@@ -149,4 +152,5 @@ int thread_get_load_avg (void);
 
 bool is_large_priority(struct list_elem *e1, struct list_elem *e2, void *aux);
 void check_thread_status(struct thread *t);
+void check_thread_priority(struct thread *t);
 #endif /* threads/thread.h */

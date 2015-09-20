@@ -38,11 +38,13 @@ test_priority_condvar (void)
     {
       lock_acquire (&lock);
       msg ("Signaling...");
-//msg("[1] Lock Holder :: %d (priority : %d)", lock.holder->tid, lock.holder->priority);
+//msg("[1] Lock Holder :: %d (priority : %d, %d)", lock.holder->tid, lock.holder->priority, lock.holder->d_priority);
+//msg("[1-1] Lock Holder :: %d (priority : %d, %d)", list_size(&lock.holder->donors), lock.holder->priority, lock.holder->d_priority);
       cond_signal (&condition, &lock);
-//msg("[3] Lock Holder :: %d (priority : %d)", lock.holder->tid, lock.holder->priority);
+//msg("[3] Lock Holder :: %d (priority : %d, %d)", lock.holder->tid, lock.holder->priority, lock.holder->d_priority);
       lock_release (&lock);
     }
+//msg("[4] priority : %d, %d", thread_current()->priority, thread_current()->d_priority);
 }
 
 static void

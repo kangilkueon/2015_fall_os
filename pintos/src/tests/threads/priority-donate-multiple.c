@@ -59,7 +59,11 @@ a_thread_func (void *lock_)
 {
   struct lock *lock = lock_;
 
+  //msg("[2] tid :: %d", lock->holder->tid);
+  //msg("[2] test :: %d", list_size(&lock->holder->donors));
   lock_acquire (lock);
+  //msg("[2-1] tid :: %d", lock->holder->tid);
+  //msg("[2-2] test :: %d", list_size(&lock->holder->donors));
   msg ("Thread a acquired lock a.");
   lock_release (lock);
   msg ("Thread a finished.");
@@ -70,7 +74,11 @@ b_thread_func (void *lock_)
 {
   struct lock *lock = lock_;
 
+  //msg("[3] test :: %d", list_size(&lock->holder->donors));
+ // msg("[3] tid  :: %d", lock->holder->tid);
   lock_acquire (lock);
+ // msg("[3-2] tid  :: %d", lock->holder->tid);
+ // msg("[3-1] test :: %d", list_size(&lock->holder->donors));
   msg ("Thread b acquired lock b.");
   lock_release (lock);
   msg ("Thread b finished.");

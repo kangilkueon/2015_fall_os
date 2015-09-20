@@ -42,6 +42,7 @@ void cond_signal (struct condition *, struct lock *);
 void cond_broadcast (struct condition *, struct lock *);
 
 bool is_large_priority_in_semaphore(struct list_elem *e1, struct list_elem *e2, void *aux);
+bool is_large_priority_for_integer(struct list_elem *e1, struct list_elem *e2, void *aux);
 /* Optimization barrier.
 
    The compiler will not reorder operations across an

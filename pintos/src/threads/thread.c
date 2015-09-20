@@ -243,7 +243,7 @@ thread_unblock (struct thread *t)
   /* 2015.09.16. Add for priority scheduling(e) */
 
   t->status = THREAD_READY;
-  intr_set_level (old_level);
+  //intr_set_level (old_level);
 
   /* 2015.09.17. Add for priority scheduling(s) */
   if (thread_current() != idle_thread && !intr_context()) {
@@ -251,7 +251,16 @@ thread_unblock (struct thread *t)
       thread_yield();
     }
   }
+  intr_set_level (old_level);
   /* 2015.09.17. Add for priority scheduling(e) */
+}
+
+void check_thread_priority(struct thread *t){
+  struct thread *curr = thread_current();
+
+  if(!intr_context()){
+    if(t->priority >= curr->priority) thread_yield();
+  }
 }
 
 /* Returns the name of the running thread. */
@@ -322,9 +331,7 @@ thread_yield (void)
   if (cur != idle_thread) { 
     /* 2015.09.16. Add for priority scheduling(s) */
     list_insert_ordered(&ready_list, &cur->elem, &is_large_priority, NULL);
-    //list_sort(&ready_list, &is_large_priority, NULL);
     /* 2015.09.16. Add for priority scheduling(e) */
-    //list_push_back (&ready_list, &cur->elem);
   }
   cur->status = THREAD_READY;
   schedule ();
@@ -352,8 +359,13 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
   /* 2015.09.17. Add for test priority change, if priority is changed, it have to yield agian(s) */
+  if(thread_current()->d_priority >= 0 && thread_current()->d_priority > new_priority){
+    thread_current()->d_priority = new_priority;
+  }
+  if(thread_current()->d_priority < 0){
+    thread_current()->priority = new_priority;
+  }
   thread_yield();
   /* 2015.09.17. Add for test priority change, if priority is changed, it have to yield agian(e) */
 }
@@ -482,7 +494,10 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  t->d_priority = -1;//priority;
+  /* 2015.09.18. Add for priority donation (s) */
+  t->d_priority = -1;
+  list_init(&t->donors);
+  /* 2015.09.18. Add for priority donation (e) */
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
@@ -620,11 +635,3 @@ void check_thread_status(struct thread *t){
   printf("##THREAD PRIORITY :: %d ( %d ) / %d \n\n",t->tid,  temp, t->status);
 }
 
-void refresh_thread_running(struct thread *t){
-  /* 2015.09.17. Add for priority scheduling(s) */
-  if (thread_current() != idle_thread) {
-    if(t->priority > thread_current()->priority){
-      thread_yield();
-    }
-  }
-}

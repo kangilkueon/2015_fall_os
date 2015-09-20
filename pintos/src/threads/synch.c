@@ -114,12 +114,13 @@ sema_up (struct semaphore *sema)
 
   old_level = intr_disable ();
   sema->value++;
-  intr_set_level (old_level);
+  //intr_set_level (old_level);
   if (!list_empty (&sema->waiters)) { 
     list_sort(&sema->waiters, &is_large_priority, NULL);
     struct thread *t = list_entry (list_pop_front (&sema->waiters), struct thread, elem);
     thread_unblock (t);
   }
+  intr_set_level (old_level);
 }
 
 static void sema_test_helper (void *sema_);
@@ -201,10 +202,13 @@ lock_acquire (struct lock *lock)
   /* 2015.09.17. Add for priority donation (s) */
   struct thread *lock_holder = lock->holder;
   if(lock_holder != NULL){
-    if (lock_holder->d_priority < 0){
+    if (lock_holder->priority <= thread_get_priority()){
       int d_priority = thread_get_priority ();
-      lock_holder->d_priority = lock_holder->priority;
+      if(lock_holder->d_priority < 0)
+        lock_holder->d_priority = lock_holder->priority;
       lock_holder->priority = d_priority;
+      list_insert_ordered(&lock_holder->donors, &thread_current()->donorelem, &is_large_priority, NULL); 
+      thread_current()->waiting_lock = lock;
     }
   }
   /* 2015.09.17. Add for priority donation (e) */
@@ -244,14 +248,26 @@ lock_release (struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
 
   /* 2015.09.17. (s) */
+  struct thread *t = thread_current(); 
   lock->holder = NULL;
-  sema_up (&lock->semaphore);
-  //thread_set_priority(thread_current()->d_priority);
-  /* 2015.09.17. (s) */
-  if(thread_current()->d_priority >= 0){
-     thread_current()->priority = thread_current()->d_priority;
-     thread_current()->d_priority = -1;
+  if(!list_empty(&t->donors)) {
+    struct list_elem *e = list_begin(&t->donors);
+    while(e != list_end(&t->donors)){
+      struct thread *donor_candidate = list_entry (e, struct thread, donorelem);
+      if(donor_candidate->waiting_lock == lock){
+        list_remove(e);
+        donor_candidate->waiting_lock = NULL;
+        if(t->d_priority >= 0) t->priority = t->d_priority;
+      } 
+      e = list_next(e);
+    }
+    struct thread *donor = list_entry (list_begin (&t->donors), struct thread, donorelem);
+    if(donor->priority > t->priority){ 
+      t->priority =  donor->priority;
+    }
+    if(list_empty(&t->donors)) t->d_priority = -1;
   }
+  sema_up (&lock->semaphore);
   /* 2015.09.17. (e) */
 }
 
@@ -315,8 +331,6 @@ cond_wait (struct condition *cond, struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
   
   sema_init (&waiter.semaphore, 0);
-  // 2015.09.18. Add for priority-condvar (s)
-  //list_insert_ordered(&cond->waiters, &waiter.elem, &is_large_priority_in_semaphore, NULL);
   list_push_back (&cond->waiters, &waiter.elem);
   lock_release (lock);
   sema_down (&waiter.semaphore);
@@ -339,7 +353,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (lock_held_by_current_thread (lock));
 
   if (!list_empty (&cond->waiters)){
-    list_sort(&cond->waiters, is_large_priority_in_semaphore, NULL);
+    list_sort(&cond->waiters, &is_large_priority_in_semaphore, NULL);
     sema_up (&list_entry (list_pop_front (&cond->waiters),
                           struct semaphore_elem, elem)->semaphore);
   }
@@ -366,18 +380,9 @@ is_large_priority_in_semaphore(struct list_elem *e1, struct list_elem *e2, void 
   struct semaphore_elem *s1 = list_entry(e1, struct semaphore_elem, elem);
   struct semaphore_elem *s2 = list_entry(e2, struct semaphore_elem, elem);
 
-  struct list_elem *t1 = list_max(&s1->semaphore.waiters, &is_large_priority, NULL);
-  struct list_elem *t2 = list_max(&s2->semaphore.waiters, &is_large_priority, NULL);
+  struct list_elem *t1 = list_max(&s1->semaphore.waiters, &is_large_priority, &aux);
+  struct list_elem *t2 = list_max(&s2->semaphore.waiters, &is_large_priority, &aux);
 
-  return is_large_priority(t1, t2, NULL);
+  return is_large_priority(t1, t2, &aux);
 }
 
-/*
-bool 
-get_max_priority_in_condition(struct semaphore_elem *e1, struct semaphore_elem *e2, void *aux) {
-  struct thread *t1 = list_max(e1, &is_large_priority, null);
-  struct thread *t2 = list_max(e2, &is_large_priority, null);
-
-  return (t1->priority > t2->priority);
-}
-*/
