@@ -189,6 +189,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
       //t->sleep_ticks++;
       if(t->sleep_ticks <= ticks) {
         thread_unblock (t);
+        //check_thread_priority ();
         list_remove(e);
       }
       else break;
@@ -197,7 +198,6 @@ timer_interrupt (struct intr_frame *args UNUSED)
     }
   }
   /* 2015.09.15. Add for avoid busy-waiting(e) */
-  thread_tick ();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

@@ -255,12 +255,22 @@ thread_unblock (struct thread *t)
   /* 2015.09.17. Add for priority scheduling(e) */
 }
 
-void check_thread_priority(struct thread *t){
+void check_thread_priority(void){
+/*
+  enum intr_level old_level = intr_disable ();
   struct thread *curr = thread_current();
-
-  if(!intr_context()){
-    if(t->priority >= curr->priority) thread_yield();
+struct thread *t = list_entry(list_front(&ready_list),
+				struct thread, elem);
+  if(intr_context()){
+    if(thread_current()->priority == t->priority) intr_yield_on_return();
   }
+  if (curr != idle_thread && !intr_context()){
+    if (t->priority > curr->priority){
+     // thread_yield ();
+    }
+  }
+  intr_set_level (old_level);
+*/
 }
 
 /* Returns the name of the running thread. */

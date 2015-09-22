@@ -152,4 +152,5 @@ int thread_get_load_avg (void);
 
 bool is_large_priority(struct list_elem *e1, struct list_elem *e2, void *aux);
 bool is_small_sleep_ticks(struct list_elem *e1, struct list_elem *e2, void *aux);
+void check_thread_priority(void);
 #endif /* threads/thread.h */
