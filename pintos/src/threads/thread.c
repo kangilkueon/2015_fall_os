@@ -114,6 +114,7 @@ thread_start (void)
   sema_init (&idle_started, 0);
   thread_create ("idle", PRI_MIN, idle, &idle_started);
 
+  load_avg = 0;
   /* Start preemptive thread scheduling. */
   intr_enable ();
 
@@ -259,23 +260,23 @@ thread_unblock (struct thread *t)
   /* 2015.09.17. Add for priority scheduling(e) */
 }
 
+/* 2015.09.30. Re-born for BSD Scheduler (s) */
 void check_thread_priority(void){
-/*
+  if(list_empty(&ready_list)) return;
   enum intr_level old_level = intr_disable ();
   struct thread *curr = thread_current();
-struct thread *t = list_entry(list_front(&ready_list),
-				struct thread, elem);
+  struct thread *t = list_entry(list_front(&ready_list), struct thread, elem);
   if(intr_context()){
-    if(thread_current()->priority == t->priority) intr_yield_on_return();
+    if(thread_current()->priority <= t->priority) intr_yield_on_return();
   }
   if (curr != idle_thread && !intr_context()){
-    if (t->priority > curr->priority){
-     // thread_yield ();
+    if (t->priority >= curr->priority){
+     thread_yield ();
     }
   }
   intr_set_level (old_level);
-*/
 }
+/* 2015.09.30. Re-born for BSD Scheduler (e) */
 
 /* Returns the name of the running thread. */
 const char *
@@ -399,7 +400,6 @@ thread_set_nice (int nice UNUSED)
   thread_current()->nice = to_float(nice);
   cal_mlfqs_priority(thread_current());
   intr_set_level (old_level);
-  thread_yield();
 }
 
 /* Returns the current thread's nice value. */
@@ -419,8 +419,8 @@ thread_get_load_avg (void)
   enum intr_level old_level = intr_disable ();
   int tmp = load_avg;
   intr_set_level (old_level);
-  tmp = to_int(tmp) * 100;
-  return tmp;
+  tmp = to_int(tmp * 100);
+  return to_int(load_avg * 100);//tmp;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -431,10 +431,10 @@ thread_get_recent_cpu (void)
   enum intr_level old_level = intr_disable ();
   int tmp = thread_current()->recent_cpu;
   intr_set_level (old_level);
-  tmp = to_int(tmp);
+  tmp = to_int(tmp * 100);
   return tmp;
 }
-
+
 /* Idle thread.  Executes when no other thread is ready to run.
 
    The idle thread is initially put on the ready list by
@@ -642,7 +642,7 @@ allocate_tid (void)
 
   return tid;
 }
-
+
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
@@ -666,57 +666,56 @@ is_small_sleep_ticks(struct list_elem *e1, struct list_elem *e2, void *aux) {
 
 bool
 is_idle_thread(struct thread *t){
-  return t == idle_thread;
+  return (t == idle_thread);
 }
 
 /* 2015.09.30. Add for BSD Scheduler (s) */
 void
-cal_bsd_scheduler_value(int load_avg_flag){
+cal_bsd_scheduler_value(){
   struct list_elem *e;
   int64_t ticks = timer_ticks();
+
   int ready_threads = 0;
-  for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e)) {
-    struct thread *t = list_entry(e, struct thread, allelem);
-    if (t->status == THREAD_RUNNING || t->status == THREAD_READY)
-      if (!is_idle_thread(t)) ready_threads++;
-  }
+  ready_threads = list_size(&ready_list);
+  if(thread_current() != idle_thread) ready_threads++;
   // Calculating load_avg
-  if(load_avg_flag == 0){
-    int first_param = ii_divide(59, 60);
-    int second_param = ff_multiply(first_param, load_avg);
-    load_avg = second_param + ii_divide(1, 60) * ready_threads;
-  }
-  // Calculating nice value
+  int first_param = ii_divide(59, 60);
+  int second_param = ff_multiply(first_param, load_avg);
+  load_avg = second_param + ii_divide(ready_threads, 60);
+
   for ( e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)) {
     struct thread *t = list_entry(e, struct thread, allelem);
-    if (ticks % 4 == 0)
+    if (!is_idle_thread(t)) {
+      // Calculating recent_cpu
+      int first_param = fi_multiply(load_avg, 2);
+      int second_param = first_param + to_float(1);
+      int third_param = ff_divide(first_param, second_param);
+      int fourth_param = ff_multiply(third_param, t->recent_cpu);
+      t->recent_cpu = fourth_param + t->nice;
       cal_mlfqs_priority(t);
-    if(load_avg_flag == 0){
-      if (t == thread_current ()) {
-        t->recent_cpu += to_float(1);
-      }
-      if (!is_idle_thread(t))
-        t->recent_cpu = ff_multiply(ff_divide(fi_multiply(load_avg, 2), (fi_multiply(load_avg, 2) + 1)), t->recent_cpu) + t->nice;
     }
   }
-
 }
 
 void cal_mlfqs_priority(struct thread *t) {
   int tmp_priority = 0;
   tmp_priority = to_float(PRI_MAX) - fi_divide(t->recent_cpu, 4) - fi_multiply(t->nice, 2);
+  tmp_priority = to_int(tmp_priority);
   if (tmp_priority > PRI_MAX) tmp_priority = PRI_MAX;
   if (tmp_priority < PRI_MIN) tmp_priority = PRI_MIN;
   t->priority = tmp_priority;
+
+  check_thread_priority();
 }
 
 int 
 to_int (int val) {
   int ret = 0;
-  if (val >= 0)
+  if (val > 0)
     ret = (val + (fixed_point_value / 2)) / fixed_point_value;
-  else
+  else if(val < 0)
     ret = (val - (fixed_point_value / 2)) / fixed_point_value;
+  else ret = 0;
   return ret;
 }
 
@@ -729,19 +728,24 @@ int
 ff_multiply(int val1, int val2) {
   return ((int64_t) val1) * val2 / fixed_point_value;
 }
-int fi_multiply(int float_val, int int_val) {
+
+int
+fi_multiply(int float_val, int int_val) {
   return float_val * int_val;
 }
 
-int ii_divide(int val1, int val2){
+int
+ii_divide(int val1, int val2){
   return fi_divide(to_float(val1), val2);
 }
 
-int ff_divide(int val1, int val2){
+int
+ff_divide(int val1, int val2){
   return ((int64_t) val1) * fixed_point_value / val2;
 }
-int fi_divide(int float_val, int int_val) {
+
+int
+fi_divide(int float_val, int int_val) {
   return float_val / int_val;
 }
-
 /* 2015.09.30. Add for BSD Scheduler (e) */

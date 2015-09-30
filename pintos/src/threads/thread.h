@@ -161,7 +161,7 @@ void check_thread_priority(void);
 bool is_idle_thread(struct thread *t);
 
 /* 2015.09.30. Add for BSD Scheduler (s) */
-void cal_bsd_scheduler_value(int load_avg_flag);
+void cal_bsd_scheduler_value();
 void cal_mlfqs_priority(struct thread *t);
 
 int to_int(int val);
