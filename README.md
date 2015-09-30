@@ -1,4 +1,6 @@
-# Operating System (2015/fall)
+# Operating System (Fall / 2015)
 
 - Pintos Project
-  - 9/30 project-1 finished
+  - Project 1 (9/7 ~ 9/30)
+  - Project 2 (10/2 ~ )
+
