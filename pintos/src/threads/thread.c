@@ -71,6 +71,10 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+/* 2015.09.30. Add for BSD Scheduler (s) */
+int load_avg = 0;
+int fixed_point_value = 16384;
+/* 2015.09.30. Add for BSD Scheduler (e) */
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -396,26 +400,33 @@ thread_set_nice (int nice UNUSED)
 
 /* Returns the current thread's nice value. */
 int
-thread_get_nice (void) 
-{
-  /* Not yet implemented. */
-  return 0;
+thread_get_nice (void) {
+  enum intr_level old_level = intr_disable ();
+  int tmp = thread_current()->nice;
+  intr_set_level (old_level);
+  return tmp;
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  enum intr_level old_level = intr_disable ();
+  int tmp = load_avg;
+  intr_set_level (old_level);
+  tmp = to_int(tmp) * 100;
+  return tmp;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  
+  enum intr_level old_level = intr_disable ();
+  int tmp = thread_current()->recent_cpu;
+  intr_set_level (old_level);
+  return tmp;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -649,3 +660,53 @@ is_small_sleep_ticks(struct list_elem *e1, struct list_elem *e2, void *aux) {
   return (t1->sleep_ticks < t2->sleep_ticks);
 }
 
+bool
+is_idle_thread(struct thread *t){
+  return t == idle_thread;
+}
+
+/* 2015.09.30. Add for BSD Scheduler (s) */
+void
+cal_bsd_scheduler_value(int load_avg_flag){
+  struct list_elem *e;
+  int64_t ticks = timer_ticks();
+  int ready_threads = 0;
+  for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e)) {
+    struct thread *t = list_entry(e, struct thread, allelem);
+    if (t->status == THREAD_RUNNING || t->status == THREAD_READY)
+      if (!is_idle_thread(t)) ready_threads++;
+  }
+  // Calculating load_avg
+  if(load_avg_flag == 0){
+    int first_param = to_float(59) / 60;
+    int second_param = ((int64_t) first_param) * load_avg / fixed_point_value;
+    load_avg = second_param + (to_float(1)/60) * ready_threads;
+  }
+  // Calculating nice value
+  for ( e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)) {
+    struct thread *t = list_entry(e, struct thread, allelem);
+    if (ticks % 4 == 0)
+      t->priority = PRI_MAX - (t->recent_cpu / 4) - (t->nice * 2);
+    if (t == thread_current ()) {
+      t->recent_cpu += 1;
+    }
+    t->recent_cpu = (2 * load_avg)/(2 * load_avg + 1) * t->recent_cpu + t->nice;
+  }
+
+}
+
+int 
+to_int (int val) {
+  int ret = 0;
+  if (val >= 0)
+    ret = (val + (fixed_point_value / 2)) / fixed_point_value;
+  else
+    ret = (val - (fixed_point_value / 2)) / fixed_point_value;
+  return ret;
+}
+
+int
+to_float(int val) {
+  return val * fixed_point_value;
+}
+/* 2015.09.30. Add for BSD Scheduler (e) */

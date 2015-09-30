@@ -88,6 +88,11 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    /* 2015.09.30. Add for BSD Scheduling (s) */
+    int nice;
+    int recent_cpu;
+    /* 2015.09.30. Add for BSD Scheduling (e) */
+
     /* 2015.09.17. Add for priority donation (s) */
     int d_priority;                       /* Priority. */
     struct lock *waiting_lock;
@@ -153,4 +158,14 @@ int thread_get_load_avg (void);
 bool is_large_priority(struct list_elem *e1, struct list_elem *e2, void *aux);
 bool is_small_sleep_ticks(struct list_elem *e1, struct list_elem *e2, void *aux);
 void check_thread_priority(void);
+bool is_idle_thread(struct thread *t);
+
+/* 2015.09.30. Add for BSD Scheduler (s) */
+void cal_bsd_scheduler_value(int load_avg_flag);
+
+int to_int(int val);
+int to_float(int val);
+int f_multiply(int val1, int val2);
+int f_divide(int val1, int val2);
+/* 2015.09.30. Add for BSD Scheduler (e) */
 #endif /* threads/thread.h */

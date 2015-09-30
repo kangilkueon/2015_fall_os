@@ -182,6 +182,11 @@ timer_interrupt (struct intr_frame *args UNUSED)
   struct list_elem *e;
   ticks++;
   thread_tick ();
+  /* 2015.09.30. Add for BSD Scheduler; re-calculating priority for every 4 tick (s) */
+  if(thread_mlfqs) {
+    cal_bsd_scheduler_value((ticks % TIMER_FREQ));
+  }
+  /* 2015.09.30. Add for BSD Scheduler; re-calculating priority for every 4 tick (e) */
   /* 2015.09.15. Add for avoid busy-waiting(s)*/
   for ( e = list_begin(&waiting_list); e != list_end(&waiting_list); e = list_next(e)){
     struct thread *t = list_entry(e, struct thread, waitingelem);
