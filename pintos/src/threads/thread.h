@@ -162,10 +162,14 @@ bool is_idle_thread(struct thread *t);
 
 /* 2015.09.30. Add for BSD Scheduler (s) */
 void cal_bsd_scheduler_value(int load_avg_flag);
+void cal_mlfqs_priority(struct thread *t);
 
 int to_int(int val);
 int to_float(int val);
-int f_multiply(int val1, int val2);
-int f_divide(int val1, int val2);
+int ff_multiply(int val1, int val2);
+int fi_multiply(int float_val, int int_val);
+int ii_divide(int val1, int val2);
+int ff_divide(int val1, int val2);
+int fi_divide(int float_val, int int_val);
 /* 2015.09.30. Add for BSD Scheduler (e) */
 #endif /* threads/thread.h */

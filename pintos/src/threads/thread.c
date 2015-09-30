@@ -395,7 +395,11 @@ thread_get_priority (void)
 void
 thread_set_nice (int nice UNUSED) 
 {
-  /* Not yet implemented. */
+  enum intr_level old_level = intr_disable ();
+  thread_current()->nice = to_float(nice);
+  cal_mlfqs_priority(thread_current());
+  intr_set_level (old_level);
+  thread_yield();
 }
 
 /* Returns the current thread's nice value. */
@@ -404,6 +408,7 @@ thread_get_nice (void) {
   enum intr_level old_level = intr_disable ();
   int tmp = thread_current()->nice;
   intr_set_level (old_level);
+  tmp = to_int(tmp);
   return tmp;
 }
 
@@ -426,6 +431,7 @@ thread_get_recent_cpu (void)
   enum intr_level old_level = intr_disable ();
   int tmp = thread_current()->recent_cpu;
   intr_set_level (old_level);
+  tmp = to_int(tmp);
   return tmp;
 }
 
@@ -621,8 +627,6 @@ schedule (void)
   if (cur != next)
     prev = switch_threads (cur, next);
   thread_schedule_tail (prev);
-//int test =  cur->priority;
-//thread_foreach (&check_thread_status, NULL);
 }
 
 /* Returns a tid to use for a new thread. */
@@ -678,21 +682,32 @@ cal_bsd_scheduler_value(int load_avg_flag){
   }
   // Calculating load_avg
   if(load_avg_flag == 0){
-    int first_param = to_float(59) / 60;
-    int second_param = ((int64_t) first_param) * load_avg / fixed_point_value;
-    load_avg = second_param + (to_float(1)/60) * ready_threads;
+    int first_param = ii_divide(59, 60);
+    int second_param = ff_multiply(first_param, load_avg);
+    load_avg = second_param + ii_divide(1, 60) * ready_threads;
   }
   // Calculating nice value
   for ( e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)) {
     struct thread *t = list_entry(e, struct thread, allelem);
     if (ticks % 4 == 0)
-      t->priority = PRI_MAX - (t->recent_cpu / 4) - (t->nice * 2);
-    if (t == thread_current ()) {
-      t->recent_cpu += 1;
+      cal_mlfqs_priority(t);
+    if(load_avg_flag == 0){
+      if (t == thread_current ()) {
+        t->recent_cpu += to_float(1);
+      }
+      if (!is_idle_thread(t))
+        t->recent_cpu = ff_multiply(ff_divide(fi_multiply(load_avg, 2), (fi_multiply(load_avg, 2) + 1)), t->recent_cpu) + t->nice;
     }
-    t->recent_cpu = (2 * load_avg)/(2 * load_avg + 1) * t->recent_cpu + t->nice;
   }
 
+}
+
+void cal_mlfqs_priority(struct thread *t) {
+  int tmp_priority = 0;
+  tmp_priority = to_float(PRI_MAX) - fi_divide(t->recent_cpu, 4) - fi_multiply(t->nice, 2);
+  if (tmp_priority > PRI_MAX) tmp_priority = PRI_MAX;
+  if (tmp_priority < PRI_MIN) tmp_priority = PRI_MIN;
+  t->priority = tmp_priority;
 }
 
 int 
@@ -709,4 +724,24 @@ int
 to_float(int val) {
   return val * fixed_point_value;
 }
+
+int 
+ff_multiply(int val1, int val2) {
+  return ((int64_t) val1) * val2 / fixed_point_value;
+}
+int fi_multiply(int float_val, int int_val) {
+  return float_val * int_val;
+}
+
+int ii_divide(int val1, int val2){
+  return fi_divide(to_float(val1), val2);
+}
+
+int ff_divide(int val1, int val2){
+  return ((int64_t) val1) * fixed_point_value / val2;
+}
+int fi_divide(int float_val, int int_val) {
+  return float_val / int_val;
+}
+
 /* 2015.09.30. Add for BSD Scheduler (e) */
