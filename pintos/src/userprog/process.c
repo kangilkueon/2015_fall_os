@@ -18,8 +18,9 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
-static thread_func start_process NO_RETURN;
-static bool load (const char *cmdline, void (**eip) (void), void **esp);
+static thread_func start_process NO_RETURN;   
+/* 2015.10.04. Modify for argument passing */
+static bool load (const char *cmdline, void (**eip) (void), void **esp, char **save_ptr);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -28,6 +29,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
+  int i;
   char *fn_copy;
   tid_t tid;
 
@@ -50,7 +52,7 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
-  char *file_name = file_name_;
+  char *file_name;// = file_name_;
   struct intr_frame if_;
   bool success;
 
@@ -59,8 +61,16 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
 
+  /* 2015.10.02. Add for argument passing (s) */
+  char *token, *save_ptr;
+  file_name = strtok_r (file_name_, " ", &save_ptr);
+  /* 2015.10.02. Add for argument passing (e) */
+
+
+  success = load (file_name, &if_.eip, &if_.esp, &save_ptr);
+
+hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
@@ -195,7 +205,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, char *file_name, char **save_ptr);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -205,8 +215,9 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
    Stores the executable's entry point into *EIP
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
+/* 2015.10.04. Add for argument passing */
 bool
-load (const char *file_name, void (**eip) (void), void **esp) 
+load (const char *file_name, void (**eip) (void), void **esp, char **save_ptr) 
 {
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
@@ -302,7 +313,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  /* 2015.10.04. Add for argument passing */
+  if (!setup_stack (esp, file_name, save_ptr))
     goto done;
 
   /* Start address. */
@@ -427,7 +439,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp, char *file_name, char **save_ptr) 
 {
   uint8_t *kpage;
   bool success = false;
@@ -436,8 +448,58 @@ setup_stack (void **esp)
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
+      if (success) {
         *esp = PHYS_BASE;
+        /* 2015.10.04. Add for argument passing (s) */
+        int argc = 0;
+        char *token;
+
+        /* parsing */
+        char *argv[LOADER_ARGS_LEN / 2 + 1];
+        for (token = (char *) file_name; token != NULL; token = strtok_r(NULL, " ", save_ptr)){
+          argv[argc++] = token;
+        }
+
+        /* for argv[i][...] */
+        int i;
+        uint32_t argv_esp[argc];
+        for( i = argc - 1; i >= 0; i-- ){
+          *esp = (uint32_t) *esp - strlen(argv[i]) - 1;
+          argv_esp[i] = (uint32_t) *esp;
+          memcpy(*esp, argv[i] , strlen(argv[i]) + 1);
+        }
+        
+        *esp = (uint32_t) *esp & 0xfffffffc;
+        size_t size = 4;//sizeof(uint8_t);
+        *esp = *esp - size;
+        *(uint32_t*)(*esp) = 0;
+
+        /* for argv[i] */
+        size = sizeof(char *);
+        *esp = *esp - size;
+        for ( i = argc; i >= 0; i--){
+          *esp = *esp - size;
+          *(uint32_t*)(*esp) = argv_esp[i];// memcpy (*esp, &argv_esp[i], size);
+        }
+
+        /* for argv */
+        size = sizeof(char **);
+        *esp = *esp - size;
+        *(uint32_t*)(*esp) = (uint32_t) *esp + size;
+
+        /* for argc */
+        size = sizeof(int);
+        *esp = *esp - size;
+       // memcpy(*esp, &argc, size);
+        *(uint32_t*)(*esp) =argc;
+
+        /* for return address */
+        size = sizeof(void *);
+        *esp = *esp - size;
+        //memcpy(*esp, "0", size);
+        *(uint32_t*)(*esp) = 0;
+        /* 2015.10.04. Add for argument passing (e) */
+      }
       else
         palloc_free_page (kpage);
     }
