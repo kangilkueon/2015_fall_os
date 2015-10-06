@@ -40,6 +40,7 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+printf("hohohoho %s\n", file_name);
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
@@ -70,7 +71,7 @@ start_process (void *file_name_)
 
   success = load (file_name, &if_.eip, &if_.esp, &save_ptr);
 
-hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
+  hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
@@ -98,6 +99,8 @@ hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  while(1);
+  
   return -1;
 }
 
@@ -468,36 +471,43 @@ setup_stack (void **esp, char *file_name, char **save_ptr)
           argv_esp[i] = (uint32_t) *esp;
           memcpy(*esp, argv[i] , strlen(argv[i]) + 1);
         }
+//printf("Addr :: %x\n", *esp);
         
+        /* word align */
         *esp = (uint32_t) *esp & 0xfffffffc;
         size_t size = 4;//sizeof(uint8_t);
         *esp = *esp - size;
         *(uint32_t*)(*esp) = 0;
+//printf("Addr :: %x\n", *esp);
 
         /* for argv[i] */
         size = sizeof(char *);
         *esp = *esp - size;
-        for ( i = argc; i >= 0; i--){
+        for ( i = argc - 1; i >= 0; i--){
           *esp = *esp - size;
           *(uint32_t*)(*esp) = argv_esp[i];// memcpy (*esp, &argv_esp[i], size);
         }
+//printf("Addr :: %x\n", *esp);
 
         /* for argv */
         size = sizeof(char **);
         *esp = *esp - size;
         *(uint32_t*)(*esp) = (uint32_t) *esp + size;
+//printf("Addr :: %x\n", *esp);
 
         /* for argc */
         size = sizeof(int);
         *esp = *esp - size;
        // memcpy(*esp, &argc, size);
         *(uint32_t*)(*esp) =argc;
+//printf("Addr :: %x\n", *esp);
 
         /* for return address */
         size = sizeof(void *);
         *esp = *esp - size;
         //memcpy(*esp, "0", size);
         *(uint32_t*)(*esp) = 0;
+//printf("Addr :: %x\n", *esp);
         /* 2015.10.04. Add for argument passing (e) */
       }
       else
