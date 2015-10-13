@@ -40,8 +40,12 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-printf("hohohoho %s\n", file_name);
   /* Create a new thread to execute FILE_NAME. */
+  /* 2015.10.13. Make thread name exclude argument (s) */
+  char *save_ptr;
+  file_name = strtok_r(file_name, " ", &save_ptr);
+  /* 2015.10.13. Make thread name exclude argument (e) */
+
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
@@ -71,11 +75,14 @@ start_process (void *file_name_)
 
   success = load (file_name, &if_.eip, &if_.esp, &save_ptr);
 
-  hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
+  /* For Debug hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true); */
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
+  if (!success) {
     thread_exit ();
+  } else {
+
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -99,7 +106,9 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  while(1);
+  struct process *p = get_process_by_tid(child_tid);
+  struct thread *t = p->my_thread;
+  sema_down(&p->wait_sema);
   
   return -1;
 }
@@ -111,6 +120,8 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
+  struct process *p = cur->my_process;
+  sema_up(&p->wait_sema);
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -535,3 +546,21 @@ install_page (void *upage, void *kpage, bool writable)
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
+
+/* 2015.10.13. Get process using pid (s)
+   Search list of child process and return it */
+struct process* get_process_by_tid (tid_t tid) {
+  struct thread *t = thread_current();
+  struct process *p = t->my_process;
+  struct list_elem *e;
+
+  for (e = list_begin (&t->children); e != list_end (&t->children); e = list_next (e)){
+    struct thread *child = list_entry (e, struct thread, childelem);
+    if (tid == child->tid) {
+      return child->my_process;
+    }
+  }
+
+  return NULL;
+}
+/* 2015.10.13. Get process using pid (e) */

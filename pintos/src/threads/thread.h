@@ -113,6 +113,13 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+
+    /* 2015.10.13. Making process(s) */
+    struct process *my_process;
+    struct list children;
+    struct thread *parent;
+    struct list_elem childelem;
+    /* 2015.10.13. Making process(e) */
 #endif
 
     /* Owned by thread.c. */

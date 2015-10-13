@@ -203,6 +203,23 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  /* 2015.10.13. Initialize process (s) */
+  #ifdef USERPROG
+  struct process *p;
+  p = palloc_get_page (PAL_ZERO);
+  p->pid = tid;
+  p->my_thread = t;
+  p->exit = false;
+
+  t->my_process = p;
+  t->parent = thread_current();
+
+  sema_init(&p->wait_sema, 0);
+
+  list_push_back(&thread_current()->children, &t->childelem);
+  #endif
+  /* 2015.10.13. Initialize process (e) */
+
   thread_unblock (t);
   /* Add to run queue. */
 
@@ -243,7 +260,6 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   /* 2015.09.16. Add for priority scheduling(s) */
-  //list_push_back (&ready_list, &t->elem);
   list_insert_ordered(&ready_list, &t->elem, &is_large_priority, NULL);
   /* 2015.09.16. Add for priority scheduling(e) */
 
@@ -525,6 +541,13 @@ init_thread (struct thread *t, const char *name, int priority)
   t->d_priority = -1;
   list_init(&t->donors);
   /* 2015.09.18. Add for priority donation (e) */
+
+  /* 2015.10.13. Initialize list which is for using management of process' children (s) */
+  #ifdef USERPROG
+  list_init(&t->children);
+  #endif
+  /* 2015.10.13. Initialize list which is for using management of process' children (s) */
+
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();

@@ -21,7 +21,6 @@ syscall_handler (struct intr_frame *f UNUSED)
   int argv = *((int *) f->esp);
   uint32_t *addr = (uint32_t *)f->esp + 1; /* calculate next argument address */
 
-//printf("fuck :: %d\n", argv);
   if (argv ==SYS_HALT){
     shutdown_power_off();
   } else if(argv == SYS_EXIT){
@@ -31,9 +30,10 @@ syscall_handler (struct intr_frame *f UNUSED)
     thread_exit();
   } else if(argv == SYS_EXEC) {
     char *cmd_line = addr;
+printf("%s\n", cmd_line);
     sys_exec(cmd_line);
   } else if(argv == SYS_WAIT){
-    int pid = &addr;
+    int pid = *addr;
     wait(pid); 
   } else if(argv == SYS_CREATE) {
     char *file = addr;
@@ -43,7 +43,6 @@ syscall_handler (struct intr_frame *f UNUSED)
   } else if(argv == SYS_FILESIZE) {
   } else if(argv == SYS_READ) {
   } else if(argv == SYS_WRITE) {
-printf("SYS_WRITE\n");
     int fd = *addr;
     void* buffer = *(addr + 1);
     unsigned size = *(addr + 2);
