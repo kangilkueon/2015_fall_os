@@ -3,6 +3,7 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
 #include "devices/shutdown.h"
 
 static void syscall_handler (struct intr_frame *);
@@ -17,22 +18,32 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  /* 2015.10.05 Add for System call (s) */
-  int argv = *((int *) f->esp);
-  uint32_t *addr = (uint32_t *)f->esp + 1; /* calculate next argument address */
+  /* 2015.10.14. Implement user memory access */ 
+  check_user_memory_access(f->esp);
 
-  if (argv ==SYS_HALT){
-    shutdown_power_off();
-  } else if(argv == SYS_EXIT){
-//printf("hello?\n");
-    int status = *addr;
-    printf("%s: exit(%d)\n", thread_current()->name, status);
-    thread_exit();
-  } else if(argv == SYS_EXEC) {
-    char *cmd_line = addr;
-printf("%s\n", cmd_line);
-    sys_exec(cmd_line);
-  } else if(argv == SYS_WAIT){
+  /* 2015.10.05. Add for System call (s) */
+  int argv = *((int *) f->esp);
+  uint32_t *addr;
+  addr  = (uint32_t *)f->esp + 1; /* calculate next argument address */
+
+//printf("SYSTEM_CALL :: %d\n", argv);
+
+  switch (argv) {
+    case SYS_HALT: {
+      shutdown_power_off();
+    }
+    case SYS_EXIT: {
+      check_user_memory_access((void *) addr);
+      int status = *addr;
+      sys_exit(status);
+    }
+    case SYS_EXEC: {
+      check_user_memory_access((void *) addr);
+      char *cmd_line = addr;
+      f->eax = sys_exec(cmd_line);
+    }
+  }
+  if(argv == SYS_WAIT){
     int pid = *addr;
     wait(pid); 
   } else if(argv == SYS_CREATE) {
@@ -64,8 +75,15 @@ printf("%s\n", cmd_line);
   //thread_exit ();
 }
 
+void sys_exit(int status){
+  printf("%s: exit(%d)\n", thread_current()->name, status);
+  thread_exit();
+}
+
 tid_t sys_exec(char *cmd_line){
-  return process_execute(cmd_line);
+  tid_t pid = process_execute(cmd_line);
+  
+  return pid;
 }
 
 int wait(tid_t pid){
@@ -76,3 +94,17 @@ int write(int fd, const void *buffer, unsigned size) {
   putbuf(buffer, size);
   return size; 
 }
+
+
+
+/* 2015.10.14. User Memory Access (s) */
+void check_user_memory_access(void* addr){
+  if(addr == NULL || !is_user_vaddr(addr) ){
+    sys_exit(-1);
+  } else {
+    void *page = pagedir_get_page(thread_current()->pagedir, addr);
+    if(!page) sys_exit(-1);
+  }
+  return;
+}
+/* 2015.10.14. User Memory Access (e) */
