@@ -5,6 +5,9 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "devices/shutdown.h"
+#include "filesys/filesys.h"
+
+filesys_lock;
 
 static void syscall_handler (struct intr_frame *);
 tid_t sys_exec(char *cmd_line);
@@ -12,6 +15,7 @@ tid_t sys_exec(char *cmd_line);
 void
 syscall_init (void) 
 {
+  lock_init(&filesys_lock);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -42,13 +46,30 @@ syscall_handler (struct intr_frame *f UNUSED)
       char *cmd_line = addr;
       f->eax = sys_exec(cmd_line);
     }
+    case SYS_WAIT: {
+      check_user_memory_access((void *) addr);
+      int pid = *addr;
+      sys_wait(pid);
+    }
+    case SYS_CREATE: {
+      check_user_memory_access((void *) addr);
+      uint32_t* addr2;
+      addr2 = (uint32_t *) f->esp + 2;
+      check_user_memory_access((void *) addr2);
+
+      char *file = addr;
+      unsigned initial_size = &addr2;
+
+      f->eax = sys_create((const char *) file, (unsigned) initial_size);
+    }
+    case SYS_REMOVE: {
+      check_user_memory_access((void *) addr);
+
+      char *file = addr;
+      f->eax = sys_remove((const char *) file);
+    }
   }
-  if(argv == SYS_WAIT){
-    int pid = *addr;
-    wait(pid); 
-  } else if(argv == SYS_CREATE) {
-    char *file = addr;
-  } else if(argv == SYS_REMOVE) {
+  if(argv == SYS_REMOVE) {
 
   } else if(argv == SYS_OPEN) {
   } else if(argv == SYS_FILESIZE) {
@@ -58,7 +79,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     void* buffer = *(addr + 1);
     unsigned size = *(addr + 2);
 
-    f->eax = write(fd, buffer, size);
+    f->eax = sys_write(fd, buffer, size);
 //    printf("fd :: %d\n", fd);
 //    printf("buffer :: %d\n", buffer);
 //    printf("size :: %d\n", size);
@@ -86,16 +107,30 @@ tid_t sys_exec(char *cmd_line){
   return pid;
 }
 
-int wait(tid_t pid){
+int sys_wait(tid_t pid){
   return process_wait(pid); 
 }
 
-int write(int fd, const void *buffer, unsigned size) {
-  putbuf(buffer, size);
+int sys_write(int fd, const void *buffer, unsigned size) {
+  if ( fd == 1 ) {
+    putbuf(buffer, size);
+  }
   return size; 
 }
 
+int sys_create(const char *file, unsigned initial_size){
+  lock_acquire(&filesys_lock);
+  int success = filesys_create(file, initial_size);
+  lock_release(&filesys_lock);
+  return success;
+}
 
+int sys_remove(const char *file) {
+  lock_acquire(&filesys_lock);
+  int success = filesys_remove(file);
+  lock_release(&filesys_lock);
+  return success;
+}
 
 /* 2015.10.14. User Memory Access (s) */
 void check_user_memory_access(void* addr){
