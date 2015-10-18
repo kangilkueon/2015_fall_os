@@ -57,9 +57,8 @@ syscall_handler (struct intr_frame *f UNUSED)
       addr2 = (uint32_t *) f->esp + 2;
       check_user_memory_access((void *) addr2);
 
-      char *file = addr;
-      unsigned initial_size = &addr2;
-
+      char *file = *addr;
+      unsigned initial_size = *addr2;
       f->eax = sys_create((const char *) file, (unsigned) initial_size);
     }
     case SYS_REMOVE: {
@@ -69,9 +68,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       f->eax = sys_remove((const char *) file);
     }
   }
-  if(argv == SYS_REMOVE) {
-
-  } else if(argv == SYS_OPEN) {
+  if(argv == SYS_OPEN) {
   } else if(argv == SYS_FILESIZE) {
   } else if(argv == SYS_READ) {
   } else if(argv == SYS_WRITE) {
@@ -91,7 +88,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   } else if(argv == SYS_CLOSE) {
 
   }
-  else printf ("system call!\n");
+  //else printf ("system call!\n");
   /* 2015.10.05 Add for System call (e) */
   //thread_exit ();
 }
@@ -119,8 +116,13 @@ int sys_write(int fd, const void *buffer, unsigned size) {
 }
 
 int sys_create(const char *file, unsigned initial_size){
+  if(!file) {
+    sys_exit (-1);
+  }
+  check_user_memory_access(file);
   lock_acquire(&filesys_lock);
   int success = filesys_create(file, initial_size);
+
   lock_release(&filesys_lock);
   return success;
 }
@@ -134,7 +136,7 @@ int sys_remove(const char *file) {
 
 /* 2015.10.14. User Memory Access (s) */
 void check_user_memory_access(void* addr){
-  if(addr == NULL || !is_user_vaddr(addr) ){
+  if(addr == NULL || !is_user_vaddr(addr)){
     sys_exit(-1);
   } else {
     void *page = pagedir_get_page(thread_current()->pagedir, addr);

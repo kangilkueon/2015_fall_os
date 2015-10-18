@@ -11,6 +11,7 @@ void process_activate (void);
 /* 2015.10.13 Process structure (s) */
 struct process {
   tid_t pid;
+  int status;
   struct thread *my_thread;
   struct semaphore *wait_sema; 
   bool exit;
