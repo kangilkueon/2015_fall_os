@@ -27,8 +27,8 @@ syscall_handler (struct intr_frame *f UNUSED)
 
   /* 2015.10.05. Add for System call (s) */
   int argv = *((int *) f->esp);
-  uint32_t *addr;
-  addr  = (uint32_t *)f->esp + 1; /* calculate next argument address */
+//  uint32_t *addr;
+//  addr  = (uint32_t *)f->esp + 1; /* calculate next argument address */
 
 //printf("SYSTEM_CALL :: %d\n", argv);
 
@@ -37,60 +37,66 @@ syscall_handler (struct intr_frame *f UNUSED)
       shutdown_power_off();
     }
     case SYS_EXIT: {
-      check_user_memory_access((void *) addr);
+      uint32_t *addr = check_and_get_arg(f->esp, 1);
       int status = *addr;
       sys_exit(status);
     }
     case SYS_EXEC: {
-      check_user_memory_access((void *) addr);
-      char *cmd_line = addr;
-      f->eax = sys_exec(cmd_line);
+      uint32_t *addr = check_and_get_arg(f->esp, 1);
+      char *cmd_line = *addr;
+      f->eax = sys_exec((const char *) cmd_line);
     }
     case SYS_WAIT: {
-      check_user_memory_access((void *) addr);
+      uint32_t *addr = check_and_get_arg(f->esp, 1);
       int pid = *addr;
-      sys_wait(pid);
+      f->eax = sys_wait(pid);
     }
     case SYS_CREATE: {
-      check_user_memory_access((void *) addr);
-      uint32_t* addr2;
-      addr2 = (uint32_t *) f->esp + 2;
-      check_user_memory_access((void *) addr2);
+      uint32_t *addr = check_and_get_arg(f->esp, 1);
+      uint32_t* addr2 = check_and_get_arg(f->esp, 2);
 
       char *file = *addr;
       unsigned initial_size = *addr2;
       f->eax = sys_create((const char *) file, (unsigned) initial_size);
     }
     case SYS_REMOVE: {
+      uint32_t *addr = check_and_get_arg(f->esp, 1);
       check_user_memory_access((void *) addr);
 
       char *file = addr;
       f->eax = sys_remove((const char *) file);
     }
+    case SYS_OPEN: {
+
+    }
+    case SYS_FILESIZE: {
+
+    }
+    case SYS_READ: {
+
+    }
+    case SYS_WRITE: {
+      uint32_t *addr = check_and_get_arg(f->esp, 1);
+      uint32_t* addr2 = check_and_get_arg(f->esp, 2);
+      uint32_t* addr3 = check_and_get_arg(f->esp, 3);
+
+      int fd = *addr;
+      void* buffer = *(addr2);
+      unsigned size = *(addr3);
+
+      f->eax = sys_write(fd, buffer, size);
+    }
+    case SYS_SEEK: {
+
+    }
+    case SYS_TELL: {
+
+    }
+    case SYS_CLOSE: {
+
+    }
   }
-  if(argv == SYS_OPEN) {
-  } else if(argv == SYS_FILESIZE) {
-  } else if(argv == SYS_READ) {
-  } else if(argv == SYS_WRITE) {
-    int fd = *addr;
-    void* buffer = *(addr + 1);
-    unsigned size = *(addr + 2);
-
-    f->eax = sys_write(fd, buffer, size);
-//    printf("fd :: %d\n", fd);
-//    printf("buffer :: %d\n", buffer);
-//    printf("size :: %d\n", size);
-//    printf("what?\n");
-  } else if(argv == SYS_SEEK) {
-  } else if(argv == SYS_TELL) {
-
-
-  } else if(argv == SYS_CLOSE) {
-
-  }
-  //else printf ("system call!\n");
   /* 2015.10.05 Add for System call (e) */
-  //thread_exit ();
 }
 
 void sys_exit(int status){
@@ -116,10 +122,11 @@ int sys_write(int fd, const void *buffer, unsigned size) {
 }
 
 int sys_create(const char *file, unsigned initial_size){
-  if(!file) {
+  check_user_memory_access(file);
+  if(!file || strlen(file) <= 0) {
     sys_exit (-1);
   }
-  check_user_memory_access(file);
+
   lock_acquire(&filesys_lock);
   int success = filesys_create(file, initial_size);
 
@@ -134,7 +141,20 @@ int sys_remove(const char *file) {
   return success;
 }
 
+void sys_seek(int df, unsigned position){
+  lock_acquire(&filesys_lock);
+  //file_seek(fd, position);
+  lock_release(&filesys_lock);
+}
 /* 2015.10.14. User Memory Access (s) */
+int* check_and_get_arg (void* addr, int pos){
+  uint32_t *result;
+  result = (uint32_t *) addr + pos;
+  check_user_memory_access((void *) result);
+
+  return result;
+}
+
 void check_user_memory_access(void* addr){
   if(addr == NULL || !is_user_vaddr(addr)){
     sys_exit(-1);

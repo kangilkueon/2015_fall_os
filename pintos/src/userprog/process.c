@@ -108,9 +108,15 @@ process_wait (tid_t child_tid UNUSED)
 {
   struct process *p = get_process_by_tid(child_tid);
   struct thread *t = p->my_thread;
+
+  /* 2015.10.19. Wait until child process terminate */
+  if(p == NULL) {
+    return -1;
+  }
+
   sema_down(&p->wait_sema);
   
-  return -1;
+  return p->status;
 }
 
 /* Free the current process's resources. */
@@ -121,6 +127,9 @@ process_exit (void)
   uint32_t *pd;
 
   struct process *p = cur->my_process;
+
+  /* 2015.10.19. Notice to parent for it is finished */
+  p->status = 0;
   sema_up(&p->wait_sema);
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
