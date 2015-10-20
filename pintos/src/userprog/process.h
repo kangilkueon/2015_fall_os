@@ -13,6 +13,7 @@ void process_activate (void);
 struct process {
   tid_t pid;
   int status;
+  int fd;
   struct thread *my_thread;
   struct semaphore wait_sema; 
   struct semaphore exit_sema; 

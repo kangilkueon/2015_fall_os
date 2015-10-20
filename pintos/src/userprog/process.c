@@ -117,7 +117,6 @@ process_wait (tid_t child_tid UNUSED)
   sema_down(&p->wait_sema);
   int result = p->status;
   sema_down(&p->exit_sema);
- // thread_unblock(t);
   
   return result;
 }
@@ -133,10 +132,6 @@ process_exit (void)
 
   /* 2015.10.19. Notice to parent for it is finished */
   sema_up(&p->wait_sema);
-  /* 2015.10.20. Add to prevent process' deletion before parents read its data */
-  //enum intr_level old_level = intr_disable();
- // thread_block();
-  //intr_set_level(old_level);
 
   /* 2015.10.21. Remove child in the parent list */
   struct thread *parent = cur->parent;
@@ -159,6 +154,7 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+  palloc_free_page(p);
 }
 
 /* Sets up the CPU for running user code in the current

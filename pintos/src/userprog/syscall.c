@@ -70,13 +70,17 @@ syscall_handler (struct intr_frame *f UNUSED)
       uint32_t *addr = check_and_get_arg(f->esp, 1);
       check_user_memory_access((void *) addr);
 
-      char *file = addr;
+      char *file = *addr;
       f->eax = sys_remove((const char *) file);
       break;
     }
     case SYS_OPEN: {
-      break;
+      uint32_t *addr = check_and_get_arg(f->esp, 1);
+      check_user_memory_access((void *) addr);
 
+      char *file = *addr;
+      f->eax = sys_open((const char *) file);
+      break;
     }
     case SYS_FILESIZE: {
 
@@ -157,6 +161,27 @@ int sys_remove(const char *file) {
   int success = filesys_remove(file);
   lock_release(&filesys_lock);
   return success;
+}
+
+int sys_open(const char *file){
+  check_user_memory_access(file);
+  if(!file || strlen(file) <= 0) {
+    return -1;
+  }
+
+  lock_acquire(&filesys_lock);
+  struct file *f= filesys_open(file);
+  lock_release(&filesys_lock);
+
+  if (!f) {
+    return -1;
+  }
+
+  int fd = 0;
+  struct process *p = thread_current()->my_process;
+  fd = p->fd;
+  p->fd++;  
+  return fd;
 }
 
 void sys_seek(int df, unsigned position){

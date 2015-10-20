@@ -208,6 +208,7 @@ thread_create (const char *name, int priority,
   struct process *p;
   p = palloc_get_page (PAL_ZERO);
   p->pid = tid;
+  p->fd = 2;
   p->my_thread = t;
   p->exit = false;
 
