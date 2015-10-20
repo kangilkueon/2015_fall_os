@@ -2,6 +2,7 @@
 #define USERPROG_PROCESS_H
 
 #include "threads/thread.h"
+#include "threads/synch.h"
 
 tid_t process_execute (const char *file_name);
 int process_wait (tid_t);
@@ -13,7 +14,8 @@ struct process {
   tid_t pid;
   int status;
   struct thread *my_thread;
-  struct semaphore *wait_sema; 
+  struct semaphore wait_sema; 
+  struct semaphore exit_sema; 
   bool exit;
 };
 

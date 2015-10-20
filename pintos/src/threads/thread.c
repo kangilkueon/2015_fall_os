@@ -211,10 +211,11 @@ thread_create (const char *name, int priority,
   p->my_thread = t;
   p->exit = false;
 
+  sema_init(&p->wait_sema, 0);
+  sema_init(&p->exit_sema, 0);
+
   t->my_process = p;
   t->parent = thread_current();
-
-  sema_init(&p->wait_sema, 0);
 
   list_push_back(&thread_current()->children, &t->childelem);
   #endif

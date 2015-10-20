@@ -16,6 +16,7 @@
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
 #include "threads/thread.h"
+#include "threads/synch.h"
 #include "threads/vaddr.h"
 
 static thread_func start_process NO_RETURN;   
@@ -115,6 +116,7 @@ process_wait (tid_t child_tid UNUSED)
   struct thread *t = p->my_thread;
   sema_down(&p->wait_sema);
   int result = p->status;
+  sema_down(&p->exit_sema);
  // thread_unblock(t);
   
   return result;
@@ -131,11 +133,15 @@ process_exit (void)
 
   /* 2015.10.19. Notice to parent for it is finished */
   sema_up(&p->wait_sema);
-
   /* 2015.10.20. Add to prevent process' deletion before parents read its data */
-  enum intr_level old_level = intr_disable();
+  //enum intr_level old_level = intr_disable();
  // thread_block();
-  intr_set_level(old_level);
+  //intr_set_level(old_level);
+
+  /* 2015.10.21. Remove child in the parent list */
+  struct thread *parent = cur->parent;
+  list_remove(&cur->childelem);
+  sema_up(&p->exit_sema); 
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
