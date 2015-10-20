@@ -107,16 +107,17 @@ int
 process_wait (tid_t child_tid UNUSED) 
 {
   struct process *p = get_process_by_tid(child_tid);
-  struct thread *t = p->my_thread;
-
-  /* 2015.10.19. Wait until child process terminate */
-  if(p == NULL) {
+  /* 2015.10.20. Root thread do not have child */
+  if ( p == NULL ) {
     return -1;
   }
 
+  struct thread *t = p->my_thread;
   sema_down(&p->wait_sema);
+  int result = p->status;
+ // thread_unblock(t);
   
-  return p->status;
+  return result;
 }
 
 /* Free the current process's resources. */
@@ -129,8 +130,13 @@ process_exit (void)
   struct process *p = cur->my_process;
 
   /* 2015.10.19. Notice to parent for it is finished */
-  p->status = 0;
   sema_up(&p->wait_sema);
+
+  /* 2015.10.20. Add to prevent process' deletion before parents read its data */
+  enum intr_level old_level = intr_disable();
+ // thread_block();
+  intr_set_level(old_level);
+
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -560,7 +566,6 @@ install_page (void *upage, void *kpage, bool writable)
    Search list of child process and return it */
 struct process* get_process_by_tid (tid_t tid) {
   struct thread *t = thread_current();
-  struct process *p = t->my_process;
   struct list_elem *e;
 
   for (e = list_begin (&t->children); e != list_end (&t->children); e = list_next (e)){

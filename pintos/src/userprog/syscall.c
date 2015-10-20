@@ -1,6 +1,7 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include "userprog/process.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
@@ -26,30 +27,35 @@ syscall_handler (struct intr_frame *f UNUSED)
   check_user_memory_access(f->esp);
 
   /* 2015.10.05. Add for System call (s) */
-  int argv = *((int *) f->esp);
+  //int argv = *((int *) f->esp);
+  int argv = *(check_and_get_arg(f->esp, 0));//*((int *) f->esp);
 //  uint32_t *addr;
 //  addr  = (uint32_t *)f->esp + 1; /* calculate next argument address */
 
-//printf("SYSTEM_CALL :: %d\n", argv);
+//printf("SYSTEM_CALL :: %d by %s\n", argv, thread_current()->name);
 
   switch (argv) {
     case SYS_HALT: {
       shutdown_power_off();
+      break;
     }
     case SYS_EXIT: {
       uint32_t *addr = check_and_get_arg(f->esp, 1);
       int status = *addr;
       sys_exit(status);
+      break;
     }
     case SYS_EXEC: {
       uint32_t *addr = check_and_get_arg(f->esp, 1);
       char *cmd_line = *addr;
       f->eax = sys_exec((const char *) cmd_line);
+      break;
     }
     case SYS_WAIT: {
       uint32_t *addr = check_and_get_arg(f->esp, 1);
       int pid = *addr;
       f->eax = sys_wait(pid);
+      break;
     }
     case SYS_CREATE: {
       uint32_t *addr = check_and_get_arg(f->esp, 1);
@@ -58,6 +64,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       char *file = *addr;
       unsigned initial_size = *addr2;
       f->eax = sys_create((const char *) file, (unsigned) initial_size);
+      break;
     }
     case SYS_REMOVE: {
       uint32_t *addr = check_and_get_arg(f->esp, 1);
@@ -65,15 +72,19 @@ syscall_handler (struct intr_frame *f UNUSED)
 
       char *file = addr;
       f->eax = sys_remove((const char *) file);
+      break;
     }
     case SYS_OPEN: {
+      break;
 
     }
     case SYS_FILESIZE: {
 
+      break;
     }
     case SYS_READ: {
 
+      break;
     }
     case SYS_WRITE: {
       uint32_t *addr = check_and_get_arg(f->esp, 1);
@@ -85,33 +96,40 @@ syscall_handler (struct intr_frame *f UNUSED)
       unsigned size = *(addr3);
 
       f->eax = sys_write(fd, buffer, size);
+      break;
     }
     case SYS_SEEK: {
 
+      break;
     }
     case SYS_TELL: {
 
+      break;
     }
     case SYS_CLOSE: {
 
+      break;
     }
   }
   /* 2015.10.05 Add for System call (e) */
 }
 
 void sys_exit(int status){
+  /* 2015.10.20. Save status in PCB */
+  thread_current()->my_process->status = status;
+
   printf("%s: exit(%d)\n", thread_current()->name, status);
   thread_exit();
 }
 
 tid_t sys_exec(char *cmd_line){
   tid_t pid = process_execute(cmd_line);
-  
   return pid;
 }
 
 int sys_wait(tid_t pid){
-  return process_wait(pid); 
+  int result = process_wait(pid); 
+  return result;
 }
 
 int sys_write(int fd, const void *buffer, unsigned size) {
@@ -149,7 +167,7 @@ void sys_seek(int df, unsigned position){
 /* 2015.10.14. User Memory Access (s) */
 int* check_and_get_arg (void* addr, int pos){
   uint32_t *result;
-  result = (uint32_t *) addr + pos;
+  result = (uint32_t *) (addr + pos * 4);
   check_user_memory_access((void *) result);
 
   return result;
