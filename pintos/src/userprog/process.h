@@ -17,8 +17,17 @@ struct process {
   struct thread *my_thread;
   struct semaphore wait_sema; 
   struct semaphore exit_sema; 
+  struct list file_list;
   bool exit;
 };
+
+/* 2015.10.22. To File System */
+struct process_file {
+  int fd;
+  struct file *file;
+  struct list_elem elem;
+};
+
 
 struct process* get_process_by_tid (tid_t tid);
 /* 2015.10.13 Process structure (e) */

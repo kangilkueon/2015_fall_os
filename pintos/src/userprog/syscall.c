@@ -6,6 +6,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "devices/shutdown.h"
+#include "filesys/file.h"
 #include "filesys/filesys.h"
 
 filesys_lock;
@@ -87,7 +88,15 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     }
     case SYS_READ: {
+      uint32_t *addr = check_and_get_arg(f->esp, 1);
+      uint32_t* addr2 = check_and_get_arg(f->esp, 2);
+      uint32_t* addr3 = check_and_get_arg(f->esp, 3);
 
+      int fd = *addr;
+      void* buffer = *(addr2);
+      unsigned size = *(addr3);
+
+      f->eax = sys_read(fd, buffer, size);
       break;
     }
     case SYS_WRITE: {
@@ -111,7 +120,9 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     }
     case SYS_CLOSE: {
-
+      uint32_t *addr = check_and_get_arg(f->esp, 1);
+      int fd = *addr;
+      sys_close(fd);
       break;
     }
   }
@@ -136,11 +147,43 @@ int sys_wait(tid_t pid){
   return result;
 }
 
+int sys_read(int fd, void *buffer, unsigned size) {
+  check_user_memory_access(buffer);
+  if ( fd == 0 ) {
+    int i = 0;
+    for ( i = 0; i < size; i++) {
+      //buffer[i] = input_getc();
+    }
+    return size;
+  }
+  lock_acquire(&filesys_lock);
+  struct process_file *pf = get_file_by_fd (fd);
+  if(pf == NULL){
+    lock_release(&filesys_lock);
+    return -1;
+  }
+  int result = file_read(pf->file, buffer, size);
+  lock_release(&filesys_lock);
+  return result;
+  
+}
+
 int sys_write(int fd, const void *buffer, unsigned size) {
+  check_user_memory_access(buffer);
   if ( fd == 1 ) {
     putbuf(buffer, size);
+    return size;
   }
-  return size; 
+
+  lock_acquire(&filesys_lock);
+  struct process_file *pf = get_file_by_fd (fd);
+  if (pf == NULL) {
+    lock_release(&filesys_lock);
+    return -1;
+  }
+  int result = file_write(pf->file, buffer, size);
+  lock_release(&filesys_lock);
+  return result;
 }
 
 int sys_create(const char *file, unsigned initial_size){
@@ -171,16 +214,21 @@ int sys_open(const char *file){
 
   lock_acquire(&filesys_lock);
   struct file *f= filesys_open(file);
-  lock_release(&filesys_lock);
 
   if (!f) {
+    lock_release(&filesys_lock);
     return -1;
   }
 
   int fd = 0;
   struct process *p = thread_current()->my_process;
   fd = p->fd;
+  struct process_file *pf = malloc(sizeof(struct process_file));
+  pf->fd = fd;
+  pf->file = f;
+  list_push_back(&p->file_list, &pf->elem);
   p->fd++;  
+  lock_release(&filesys_lock);
   return fd;
 }
 
@@ -189,6 +237,22 @@ void sys_seek(int df, unsigned position){
   //file_seek(fd, position);
   lock_release(&filesys_lock);
 }
+
+void sys_close(int fd){
+  lock_acquire(&filesys_lock);
+  struct process_file *pf = get_file_by_fd(fd);
+  if (pf == NULL) {
+    lock_release(&filesys_lock);
+    return;
+  }
+
+  file_close(pf->file);
+  list_remove(&pf->elem);
+  free(pf);
+  //file_seek(fd, position);
+  lock_release(&filesys_lock);
+}
+
 /* 2015.10.14. User Memory Access (s) */
 int* check_and_get_arg (void* addr, int pos){
   uint32_t *result;
@@ -208,3 +272,19 @@ void check_user_memory_access(void* addr){
   return;
 }
 /* 2015.10.14. User Memory Access (e) */
+
+/* 2015.10.22. Find file in the process by fd */
+struct process_file* get_file_by_fd(int fd){
+  struct thread *cur = thread_current ();
+  struct process *p = cur->my_process;
+
+  struct list_elem *e;
+  for (e = list_begin (&p->file_list); e != list_end (&p->file_list); e = list_next (e)){
+    struct process_file *pf = list_entry (e, struct process_file, elem);
+    if (fd == pf->fd) {
+      return pf;
+    }
+  }
+
+  return NULL;
+}

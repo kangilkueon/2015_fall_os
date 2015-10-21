@@ -30,8 +30,8 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp, char **s
 tid_t
 process_execute (const char *file_name) 
 {
-  int i;
   char *fn_copy;
+  char *save_ptr;
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
@@ -43,13 +43,13 @@ process_execute (const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   /* 2015.10.13. Make thread name exclude argument (s) */
-  char *save_ptr;
-  file_name = strtok_r(file_name, " ", &save_ptr);
+  file_name = strtok_r((char *) file_name, " ", &save_ptr);
   /* 2015.10.13. Make thread name exclude argument (e) */
-
+//printf("## test ## %s\n", file_name);
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+//printf("GOOD BYE : %d\n", tid);
   return tid;
 }
 
@@ -58,7 +58,7 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
-  char *file_name;// = file_name_;
+  char *file_name;
   struct intr_frame if_;
   bool success;
 
@@ -69,7 +69,7 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
 
   /* 2015.10.02. Add for argument passing (s) */
-  char *token, *save_ptr;
+  char *save_ptr;
   file_name = strtok_r (file_name_, " ", &save_ptr);
   /* 2015.10.02. Add for argument passing (e) */
 
@@ -80,6 +80,8 @@ start_process (void *file_name_)
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) {
+//printf("HELLO :: %d\n", success);
+
     thread_exit ();
   } else {
 
@@ -113,10 +115,10 @@ process_wait (tid_t child_tid UNUSED)
     return -1;
   }
 
-  struct thread *t = p->my_thread;
   sema_down(&p->wait_sema);
   int result = p->status;
-  sema_down(&p->exit_sema);
+ // sema_down(&p->exit_sema);
+  sema_up(&p->exit_sema);
   
   return result;
 }
@@ -133,10 +135,11 @@ process_exit (void)
   /* 2015.10.19. Notice to parent for it is finished */
   sema_up(&p->wait_sema);
 
+  sema_down(&p->exit_sema); 
+
   /* 2015.10.21. Remove child in the parent list */
-  struct thread *parent = cur->parent;
   list_remove(&cur->childelem);
-  sema_up(&p->exit_sema); 
+//  sema_up(&p->exit_sema); 
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */

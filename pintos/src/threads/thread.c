@@ -208,7 +208,11 @@ thread_create (const char *name, int priority,
   struct process *p;
   p = palloc_get_page (PAL_ZERO);
   p->pid = tid;
+  
+  /* 2015.10.21. Add for system call (open) */
+  list_init(&p->file_list);
   p->fd = 2;
+
   p->my_thread = t;
   p->exit = false;
 
