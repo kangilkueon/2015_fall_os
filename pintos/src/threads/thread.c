@@ -216,6 +216,7 @@ thread_create (const char *name, int priority,
   p->my_thread = t;
   p->exit = false;
 
+  sema_init(&p->exec_sema, 0);
   sema_init(&p->wait_sema, 0);
   sema_init(&p->exit_sema, 0);
 
@@ -223,10 +224,12 @@ thread_create (const char *name, int priority,
   t->parent = thread_current();
 
   list_push_back(&thread_current()->children, &t->childelem);
+
   #endif
   /* 2015.10.13. Initialize process (e) */
 
   thread_unblock (t);
+
   /* Add to run queue. */
 
   return tid;

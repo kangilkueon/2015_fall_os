@@ -3,13 +3,14 @@
 #include <syscall-nr.h>
 #include "userprog/process.h"
 #include "threads/interrupt.h"
+#include "threads/synch.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "devices/shutdown.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 
-filesys_lock;
+struct lock filesys_lock;
 
 static void syscall_handler (struct intr_frame *);
 tid_t sys_exec(char *cmd_line);
@@ -138,6 +139,7 @@ void sys_exit(int status){
 }
 
 tid_t sys_exec(char *cmd_line){
+  check_user_memory_access(cmd_line);
   tid_t pid = process_execute(cmd_line);
   return pid;
 }

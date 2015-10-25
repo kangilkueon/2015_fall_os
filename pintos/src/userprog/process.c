@@ -31,6 +31,7 @@ tid_t
 process_execute (const char *file_name) 
 {
   char *fn_copy;
+  char *rfile_name;
   char *save_ptr;
   tid_t tid;
 
@@ -41,15 +42,31 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  /* 2015.10.22. file_name is const char, to parsing argument, make char type value */
+  rfile_name = palloc_get_page (0);
+
+  if (rfile_name == NULL)
+    return TID_ERROR;
+  strlcpy (rfile_name, file_name, PGSIZE);
+
   /* Create a new thread to execute FILE_NAME. */
   /* 2015.10.13. Make thread name exclude argument (s) */
-  file_name = strtok_r((char *) file_name, " ", &save_ptr);
-  /* 2015.10.13. Make thread name exclude argument (e) */
-//printf("## test ## %s\n", file_name);
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  rfile_name = strtok_r(rfile_name, " ", &save_ptr);
+
+  enum intr_level old_level = intr_disable();
+  tid = thread_create (rfile_name, PRI_DEFAULT, start_process, fn_copy);
+  
+  /* 2015.10.25. Implement load failed process */
+  struct process *cp = get_process_by_tid(tid);
+  sema_down(&cp->exec_sema);
+
+  if (!cp->load) {
+    return -1;
+  }
+
+  intr_set_level(old_level);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
-//printf("GOOD BYE : %d\n", tid);
   return tid;
 }
 
@@ -73,15 +90,17 @@ start_process (void *file_name_)
   file_name = strtok_r (file_name_, " ", &save_ptr);
   /* 2015.10.02. Add for argument passing (e) */
 
-
   success = load (file_name, &if_.eip, &if_.esp, &save_ptr);
 
   /* For Debug hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true); */
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) {
-//printf("HELLO :: %d\n", success);
 
+  /* 2015.10.25. Implement load failed process */
+  struct process *p = thread_current()->my_process;
+  p->load = success;
+  
+  if (!success) {
     thread_exit ();
   } else {
 
@@ -117,7 +136,6 @@ process_wait (tid_t child_tid UNUSED)
 
   sema_down(&p->wait_sema);
   int result = p->status;
- // sema_down(&p->exit_sema);
   sema_up(&p->exit_sema);
   
   return result;
@@ -133,6 +151,7 @@ process_exit (void)
   struct process *p = cur->my_process;
 
   /* 2015.10.19. Notice to parent for it is finished */
+  sema_up(&p->exec_sema);
   sema_up(&p->wait_sema);
 
   sema_down(&p->exit_sema); 

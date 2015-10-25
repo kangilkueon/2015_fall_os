@@ -13,8 +13,12 @@ void process_activate (void);
 struct process {
   tid_t pid;
   int status;
+
+  /* 2015.10.25. Implement load-failed process */
+  int load;
   int fd;
   struct thread *my_thread;
+  struct semaphore exec_sema; 
   struct semaphore wait_sema; 
   struct semaphore exit_sema; 
   struct list file_list;
