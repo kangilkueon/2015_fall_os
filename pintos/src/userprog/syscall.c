@@ -85,7 +85,11 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     }
     case SYS_FILESIZE: {
+      uint32_t *addr = check_and_get_arg(f->esp, 1);
+      check_user_memory_access((void *) addr);
 
+      int fd = *addr;
+      f->eax = sys_filesize(fd);
       break;
     }
     case SYS_READ: {
@@ -232,6 +236,18 @@ int sys_open(const char *file){
   p->fd++;  
   lock_release(&filesys_lock);
   return fd;
+}
+
+int sys_filesize(int fd){
+  lock_acquire(&filesys_lock);
+  struct process_file *pf = get_file_by_fd (fd);
+  if(pf == NULL){
+    lock_release(&filesys_lock);
+    return -1;
+  }
+  int result = file_length(pf->file);
+  lock_release(&filesys_lock);
+  return result;
 }
 
 void sys_seek(int df, unsigned position){
