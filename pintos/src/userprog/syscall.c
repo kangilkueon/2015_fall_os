@@ -12,6 +12,21 @@
 
 struct lock filesys_lock;
 
+
+void sys_exit(int status);
+tid_t sys_exec(char *cmd_line);
+int sys_create(const char *file, unsigned initial_size);
+int sys_remove(const char *file);
+int sys_open(const char *file);
+int sys_filesize(int fd);
+int sys_read(int fd, void *buffer, unsigned size);
+int sys_write(int fd, const void *buffer, unsigned size);
+void sys_seek(int fd, unsigned position);
+unsigned sys_tell(int fd);
+void sys_close(int fd);
+
+
+
 static void syscall_handler (struct intr_frame *);
 tid_t sys_exec(char *cmd_line);
 
@@ -117,11 +132,20 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     }
     case SYS_SEEK: {
+      uint32_t *addr = check_and_get_arg(f->esp, 1);
+      uint32_t* addr2 = check_and_get_arg(f->esp, 2);
 
+      int fd = *addr;
+      unsigned position = *(addr2);
+
+      sys_seek(fd, position);
       break;
     }
     case SYS_TELL: {
+      uint32_t *addr = check_and_get_arg(f->esp, 1);
 
+      int fd = *addr;
+      f->eax = sys_tell(fd);
       break;
     }
     case SYS_CLOSE: {
@@ -150,45 +174,6 @@ tid_t sys_exec(char *cmd_line){
 
 int sys_wait(tid_t pid){
   int result = process_wait(pid); 
-  return result;
-}
-
-int sys_read(int fd, void *buffer, unsigned size) {
-  check_user_memory_access(buffer);
-  if ( fd == 0 ) {
-    int i = 0;
-    for ( i = 0; i < size; i++) {
-      //buffer[i] = input_getc();
-    }
-    return size;
-  }
-  lock_acquire(&filesys_lock);
-  struct process_file *pf = get_file_by_fd (fd);
-  if(pf == NULL){
-    lock_release(&filesys_lock);
-    return -1;
-  }
-  int result = file_read(pf->file, buffer, size);
-  lock_release(&filesys_lock);
-  return result;
-  
-}
-
-int sys_write(int fd, const void *buffer, unsigned size) {
-  check_user_memory_access(buffer);
-  if ( fd == 1 ) {
-    putbuf(buffer, size);
-    return size;
-  }
-
-  lock_acquire(&filesys_lock);
-  struct process_file *pf = get_file_by_fd (fd);
-  if (pf == NULL) {
-    lock_release(&filesys_lock);
-    return -1;
-  }
-  int result = file_write(pf->file, buffer, size);
-  lock_release(&filesys_lock);
   return result;
 }
 
@@ -250,10 +235,68 @@ int sys_filesize(int fd){
   return result;
 }
 
-void sys_seek(int df, unsigned position){
+int sys_read(int fd, void *buffer, unsigned size) {
+  check_user_memory_access(buffer);
+  if ( fd == 0 ) {
+    unsigned i = 0;
+    for ( i = 0; i < size; i++) {
+      //buffer[i] = input_getc();
+    }
+    return size;
+  }
   lock_acquire(&filesys_lock);
-  //file_seek(fd, position);
+  struct process_file *pf = get_file_by_fd (fd);
+  if(pf == NULL){
+    lock_release(&filesys_lock);
+    return -1;
+  }
+  int result = file_read(pf->file, buffer, size);
   lock_release(&filesys_lock);
+  return result;
+  
+}
+
+int sys_write(int fd, const void *buffer, unsigned size) {
+  check_user_memory_access(buffer);
+  if ( fd == 1 ) {
+    putbuf(buffer, size);
+    return size;
+  }
+
+  lock_acquire(&filesys_lock);
+  struct process_file *pf = get_file_by_fd (fd);
+  if (pf == NULL) {
+    lock_release(&filesys_lock);
+    return -1;
+  }
+  int result = file_write(pf->file, buffer, size);
+  lock_release(&filesys_lock);
+  return result;
+}
+
+void sys_seek(int fd, unsigned position){
+  lock_acquire(&filesys_lock);
+  struct process_file *pf = get_file_by_fd (fd);
+  if(pf == NULL){
+    lock_release(&filesys_lock);
+    return;
+  }
+  file_seek(pf->file, position);
+  lock_release(&filesys_lock);
+}
+
+unsigned sys_tell(int fd){
+  unsigned result;
+  lock_acquire(&filesys_lock);
+  struct process_file *pf = get_file_by_fd (fd);
+  if(pf == NULL){
+    lock_release(&filesys_lock);
+    return -1;
+  }
+  result = file_tell(pf->file);
+  lock_release(&filesys_lock);
+
+  return result;
 }
 
 void sys_close(int fd){
