@@ -207,15 +207,18 @@ thread_create (const char *name, int priority,
   #ifdef USERPROG
   struct process *p;
   p = palloc_get_page (PAL_ZERO);
+  if (p == NULL) {
+    palloc_free_page(t);
+    return TID_ERROR;
+  }
   p->pid = tid;
   
   /* 2015.10.21. Add for system call (open) */
   list_init(&p->file_list);
   p->fd = 2;
-
   p->my_thread = t;
-  p->exit = false;
 
+  sema_init(&p->status_sema, 0);
   sema_init(&p->exec_sema, 0);
   sema_init(&p->wait_sema, 0);
   sema_init(&p->exit_sema, 0);

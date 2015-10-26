@@ -44,7 +44,6 @@ process_execute (const char *file_name)
 
   /* 2015.10.22. file_name is const char, to parsing argument, make char type value */
   rfile_name = palloc_get_page (0);
-
   if (rfile_name == NULL)
     return TID_ERROR;
   strlcpy (rfile_name, file_name, PGSIZE);
@@ -52,20 +51,28 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   /* 2015.10.13. Make thread name exclude argument (s) */
   rfile_name = strtok_r(rfile_name, " ", &save_ptr);
-  enum intr_level old_level = intr_disable();
   tid = thread_create (rfile_name, PRI_DEFAULT, start_process, fn_copy);
   
   /* 2015.10.25. Implement load failed process */
   struct process *cp = get_process_by_tid(tid);
+  if (cp == NULL) {
+    palloc_free_page (fn_copy);
+    //palloc_free_page (rfile_name);
+    palloc_free_page (cp);
+
+    return -1;
+  }
   sema_down(&cp->exec_sema);
 
   if (!cp->load) {
-    return -1;
+    tid = TID_ERROR;
   }
 
-  intr_set_level(old_level);
-  if (tid == TID_ERROR)
+  if (tid == TID_ERROR) {
     palloc_free_page (fn_copy); 
+    //palloc_free_page (rfile_name);
+  }
+  palloc_free_page (rfile_name);
   return tid;
 }
 
@@ -93,17 +100,23 @@ start_process (void *file_name_)
 
   /* For Debug hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true); */
   /* If load failed, quit. */
-  palloc_free_page (file_name);
 
   /* 2015.10.25. Implement load failed process */
   struct process *p = thread_current()->my_process;
   p->load = success;
-  
+  sema_up(&p->exec_sema);
   if (!success) {
+    /* 2015.10.26. To free PCB */
+    sema_up(&p->wait_sema);
+    sema_up(&p->exit_sema);
     thread_exit ();
   } else {
-
+    p->exec_file = filesys_open(file_name);
+    if(p->exec_file != NULL) {
+      file_deny_write(p->exec_file);
+    }
   }
+  palloc_free_page (file_name);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -132,10 +145,14 @@ process_wait (tid_t child_tid UNUSED)
   if ( p == NULL ) {
     return -1;
   }
+  sema_up(&p->wait_sema);
 
-  sema_down(&p->wait_sema);
+  /* 2015.10.26. Wait until child ready to exit */
+  sema_down(&p->status_sema);
+
   int result = p->status;
   sema_up(&p->exit_sema);
+  //palloc_free_page(p);
   
   return result;
 }
@@ -150,14 +167,27 @@ process_exit (void)
   struct process *p = cur->my_process;
 
   /* 2015.10.19. Notice to parent for it is finished */
-  sema_up(&p->exec_sema);
-  sema_up(&p->wait_sema);
+  if(p->exec_file != NULL) {
+    file_close (p->exec_file);
+  }
 
+  /* 2015.10.26. Wait until parent get this child */
+  sema_down(&p->wait_sema);
+  list_remove(&cur->childelem);
+  sema_up(&p->status_sema);
+
+  /* Wait until parent get its status */
   sema_down(&p->exit_sema); 
 
-  /* 2015.10.21. Remove child in the parent list */
-  list_remove(&cur->childelem);
-//  sema_up(&p->exit_sema); 
+  /* 2015.10.26. Destroy all children */
+  while (!list_empty(&cur->children)){
+    struct list_elem *e = list_pop_front (&cur->children);
+    struct thread *t = list_entry (e, struct thread, childelem);
+    struct process *cp = t->my_process;
+    palloc_free_page(cp);
+    palloc_free_page(t);
+  }
+
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */

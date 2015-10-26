@@ -1,6 +1,7 @@
 #ifndef USERPROG_PROCESS_H
 #define USERPROG_PROCESS_H
 
+#include "filesys/file.h"
 #include "threads/thread.h"
 #include "threads/synch.h"
 
@@ -17,12 +18,13 @@ struct process {
   /* 2015.10.25. Implement load-failed process */
   int load;
   int fd;
+  struct file *exec_file;
   struct thread *my_thread;
   struct semaphore exec_sema; 
   struct semaphore wait_sema; 
+  struct semaphore status_sema;
   struct semaphore exit_sema; 
   struct list file_list;
-  bool exit;
 };
 
 /* 2015.10.22. To File System */

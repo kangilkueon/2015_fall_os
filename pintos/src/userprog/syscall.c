@@ -46,9 +46,6 @@ syscall_handler (struct intr_frame *f UNUSED)
   /* 2015.10.05. Add for System call (s) */
   int argv = *(check_and_get_arg(f->esp, 0));
 
-//printf("SYSTEM_CALL :: %d by %s\n", argv, thread_current()->name);
-//printf("IS IT WRITE? %d\n", SYS_WRITE);
-
   switch (argv) {
     case SYS_HALT: {
       shutdown_power_off();
@@ -63,7 +60,6 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_EXEC: {
       uint32_t *addr = check_and_get_arg(f->esp, 1);
       char *cmd_line = *addr;
-      //printf("In here?\n");
       f->eax = sys_exec((const char *) cmd_line);
       break;
     }
@@ -158,12 +154,8 @@ syscall_handler (struct intr_frame *f UNUSED)
 
 void sys_exit(int status){
   /* 2015.10.26. Close all file */
-  struct process *mp = thread_current()->my_process;
-  int max = mp->fd;
-  int i;
-  for(i = 2; i <= max; i++){
-    sys_close(i);
-  }
+  close_all_file();
+
   /* 2015.10.20. Save status in PCB */
   thread_current()->my_process->status = status;
 
@@ -190,8 +182,8 @@ int sys_create(const char *file, unsigned initial_size){
 
   lock_acquire(&filesys_lock);
   int success = filesys_create(file, initial_size);
-
   lock_release(&filesys_lock);
+
   return success;
 }
 
@@ -199,6 +191,7 @@ int sys_remove(const char *file) {
   lock_acquire(&filesys_lock);
   int success = filesys_remove(file);
   lock_release(&filesys_lock);
+
   return success;
 }
 
@@ -210,33 +203,37 @@ int sys_open(const char *file){
 
   lock_acquire(&filesys_lock);
   struct file *f= filesys_open(file);
+  lock_release(&filesys_lock);
 
   if (!f) {
-    lock_release(&filesys_lock);
     return -1;
   }
 
   int fd = 0;
   struct process *p = thread_current()->my_process;
   fd = p->fd;
-  struct process_file *pf = malloc(sizeof(struct process_file));
+  //struct process_file *pf = malloc(sizeof(struct process_file));
+  struct process_file *pf = palloc_get_page(0);// malloc(sizeof(struct process_file));
+  if(pf == NULL) {
+    return -1;
+  }
   pf->fd = fd;
   pf->file = f;
   list_push_back(&p->file_list, &pf->elem);
   p->fd++;  
-  lock_release(&filesys_lock);
   return fd;
 }
 
 int sys_filesize(int fd){
-  lock_acquire(&filesys_lock);
   struct process_file *pf = get_file_by_fd (fd);
+
   if(pf == NULL){
-    lock_release(&filesys_lock);
     return -1;
   }
+  lock_acquire(&filesys_lock);
   int result = file_length(pf->file);
   lock_release(&filesys_lock);
+
   return result;
 }
 
@@ -249,14 +246,12 @@ int sys_read(int fd, void *buffer, unsigned size) {
     }
     return size;
   }
-  lock_acquire(&filesys_lock);
   struct process_file *pf = get_file_by_fd (fd);
   if(pf == NULL){
-    lock_release(&filesys_lock);
     return -1;
   }
+  lock_acquire(&filesys_lock);
   int result = file_read(pf->file, buffer, size);
-  file_deny_write(pf->file);
   lock_release(&filesys_lock);
   return result;
   
@@ -269,12 +264,11 @@ int sys_write(int fd, const void *buffer, unsigned size) {
     return size;
   }
 
-  lock_acquire(&filesys_lock);
   struct process_file *pf = get_file_by_fd (fd);
   if (pf == NULL) {
-    lock_release(&filesys_lock);
     return -1;
   }
+  lock_acquire(&filesys_lock);
   int result = file_write(pf->file, buffer, size);
   lock_release(&filesys_lock);
 
@@ -282,24 +276,23 @@ int sys_write(int fd, const void *buffer, unsigned size) {
 }
 
 void sys_seek(int fd, unsigned position){
-  lock_acquire(&filesys_lock);
   struct process_file *pf = get_file_by_fd (fd);
   if(pf == NULL){
-    lock_release(&filesys_lock);
     return;
   }
+
+  lock_acquire(&filesys_lock);
   file_seek(pf->file, position);
   lock_release(&filesys_lock);
 }
 
 unsigned sys_tell(int fd){
   unsigned result;
-  lock_acquire(&filesys_lock);
   struct process_file *pf = get_file_by_fd (fd);
   if(pf == NULL){
-    lock_release(&filesys_lock);
     return -1;
   }
+  lock_acquire(&filesys_lock);
   result = file_tell(pf->file);
   lock_release(&filesys_lock);
 
@@ -307,16 +300,15 @@ unsigned sys_tell(int fd){
 }
 
 void sys_close(int fd){
-  lock_acquire(&filesys_lock);
   struct process_file *pf = get_file_by_fd(fd);
   if (pf == NULL) {
-    lock_release(&filesys_lock);
     return;
   }
 
+  lock_acquire(&filesys_lock);
   file_close(pf->file);
   list_remove(&pf->elem);
-  free(pf);
+  palloc_free_page(pf);
   lock_release(&filesys_lock);
 }
 
@@ -340,6 +332,20 @@ void check_user_memory_access(void* addr){
     }
   }
   return;
+}
+
+void close_all_file () {
+  struct thread *cur = thread_current ();
+  struct process *p = cur->my_process;
+
+  struct list_elem *e;
+  while (!list_empty(&p->file_list)) {
+    struct list_elem *e = list_pop_front(&p->file_list);
+    struct process_file *pf = list_entry (e, struct process_file, elem);
+    file_close(pf->file);
+    palloc_free_page(pf);
+    //free(pf);
+  }
 }
 /* 2015.10.14. User Memory Access (e) */
 
