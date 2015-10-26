@@ -52,7 +52,6 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   /* 2015.10.13. Make thread name exclude argument (s) */
   rfile_name = strtok_r(rfile_name, " ", &save_ptr);
-
   enum intr_level old_level = intr_disable();
   tid = thread_create (rfile_name, PRI_DEFAULT, start_process, fn_copy);
   

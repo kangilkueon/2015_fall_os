@@ -44,12 +44,10 @@ syscall_handler (struct intr_frame *f UNUSED)
   check_user_memory_access(f->esp);
 
   /* 2015.10.05. Add for System call (s) */
-  //int argv = *((int *) f->esp);
-  int argv = *(check_and_get_arg(f->esp, 0));//*((int *) f->esp);
-//  uint32_t *addr;
-//  addr  = (uint32_t *)f->esp + 1; /* calculate next argument address */
+  int argv = *(check_and_get_arg(f->esp, 0));
 
 //printf("SYSTEM_CALL :: %d by %s\n", argv, thread_current()->name);
+//printf("IS IT WRITE? %d\n", SYS_WRITE);
 
   switch (argv) {
     case SYS_HALT: {
@@ -65,6 +63,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_EXEC: {
       uint32_t *addr = check_and_get_arg(f->esp, 1);
       char *cmd_line = *addr;
+      //printf("In here?\n");
       f->eax = sys_exec((const char *) cmd_line);
       break;
     }
@@ -127,7 +126,6 @@ syscall_handler (struct intr_frame *f UNUSED)
       int fd = *addr;
       void* buffer = *(addr2);
       unsigned size = *(addr3);
-
       f->eax = sys_write(fd, buffer, size);
       break;
     }
@@ -159,6 +157,13 @@ syscall_handler (struct intr_frame *f UNUSED)
 }
 
 void sys_exit(int status){
+  /* 2015.10.26. Close all file */
+  struct process *mp = thread_current()->my_process;
+  int max = mp->fd;
+  int i;
+  for(i = 2; i <= max; i++){
+    sys_close(i);
+  }
   /* 2015.10.20. Save status in PCB */
   thread_current()->my_process->status = status;
 
@@ -240,7 +245,7 @@ int sys_read(int fd, void *buffer, unsigned size) {
   if ( fd == 0 ) {
     unsigned i = 0;
     for ( i = 0; i < size; i++) {
-      //buffer[i] = input_getc();
+      *(uint8_t *)(buffer + i) = input_getc();
     }
     return size;
   }
@@ -251,6 +256,7 @@ int sys_read(int fd, void *buffer, unsigned size) {
     return -1;
   }
   int result = file_read(pf->file, buffer, size);
+  file_deny_write(pf->file);
   lock_release(&filesys_lock);
   return result;
   
@@ -271,6 +277,7 @@ int sys_write(int fd, const void *buffer, unsigned size) {
   }
   int result = file_write(pf->file, buffer, size);
   lock_release(&filesys_lock);
+
   return result;
 }
 
@@ -310,7 +317,6 @@ void sys_close(int fd){
   file_close(pf->file);
   list_remove(&pf->elem);
   free(pf);
-  //file_seek(fd, position);
   lock_release(&filesys_lock);
 }
 
@@ -328,7 +334,10 @@ void check_user_memory_access(void* addr){
     sys_exit(-1);
   } else {
     void *page = pagedir_get_page(thread_current()->pagedir, addr);
-    if(!page) sys_exit(-1);
+
+    if(!page) {
+      sys_exit(-1);
+    }
   }
   return;
 }
