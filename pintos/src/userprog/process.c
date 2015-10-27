@@ -44,8 +44,10 @@ process_execute (const char *file_name)
 
   /* 2015.10.22. file_name is const char, to parsing argument, make char type value */
   rfile_name = palloc_get_page (0);
-  if (rfile_name == NULL)
+  if (rfile_name == NULL) {
+    palloc_free_page (fn_copy);
     return TID_ERROR;
+  }
   strlcpy (rfile_name, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
@@ -69,12 +71,12 @@ process_execute (const char *file_name)
 
   if (!cp->load) {
     tid = TID_ERROR;
-    close_all_file(cp);
-    list_remove (&cp->child_elem);
-    palloc_free_page(cp);
   }
 
   if (tid == TID_ERROR) {
+    close_all_file(cp);
+    list_remove (&cp->child_elem);
+    palloc_free_page (cp);
     palloc_free_page (fn_copy); 
   }
   palloc_free_page (rfile_name);
