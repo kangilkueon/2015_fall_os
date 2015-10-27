@@ -118,7 +118,6 @@ struct thread
     struct process *my_process;
     struct list children;
     struct thread *parent;
-    struct list_elem childelem;
     /* 2015.10.13. Making process(e) */
 #endif
 

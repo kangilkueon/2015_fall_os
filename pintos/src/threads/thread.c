@@ -217,17 +217,17 @@ thread_create (const char *name, int priority,
   list_init(&p->file_list);
   p->fd = 2;
   p->my_thread = t;
+  p->exit = 0;
+  p->free_and_remove = 0;
 
-  sema_init(&p->status_sema, 0);
+  //sema_init(&p->status_sema, 0);
   sema_init(&p->exec_sema, 0);
-  sema_init(&p->wait_sema, 0);
-  sema_init(&p->exit_sema, 0);
 
   t->my_process = p;
   t->parent = thread_current();
 
-  list_push_back(&thread_current()->children, &t->childelem);
-
+  //list_push_back(&thread_current()->children, &t->childelem);
+  list_push_back(&thread_current()->children, &p->child_elem);
   #endif
   /* 2015.10.13. Initialize process (e) */
 

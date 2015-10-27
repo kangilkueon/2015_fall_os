@@ -21,10 +21,13 @@ struct process {
   struct file *exec_file;
   struct thread *my_thread;
   struct semaphore exec_sema; 
-  struct semaphore wait_sema; 
-  struct semaphore status_sema;
-  struct semaphore exit_sema; 
+  //struct semaphore status_sema;
   struct list file_list;
+
+  /* 2015.10.27. To preserve PCB when thread destroy */
+  struct list_elem child_elem;
+  int exit;
+  int free_and_remove;
 };
 
 /* 2015.10.22. To File System */

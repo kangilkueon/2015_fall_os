@@ -56,21 +56,26 @@ process_execute (const char *file_name)
   /* 2015.10.25. Implement load failed process */
   struct process *cp = get_process_by_tid(tid);
   if (cp == NULL) {
+    palloc_free_page (rfile_name);
     palloc_free_page (fn_copy);
-    //palloc_free_page (rfile_name);
     palloc_free_page (cp);
-
     return -1;
   }
-  sema_down(&cp->exec_sema);
+  if(cp->exit == 0) {
+    sema_down(&cp->exec_sema);
+  }
+//printf("[Who is first?[%d]] process execute\n", cp->pid);
+//printf("[You already have status? [%d]\n", cp->status);
 
   if (!cp->load) {
     tid = TID_ERROR;
+    close_all_file(cp);
+    list_remove (&cp->child_elem);
+    palloc_free_page(cp);
   }
 
   if (tid == TID_ERROR) {
     palloc_free_page (fn_copy); 
-    //palloc_free_page (rfile_name);
   }
   palloc_free_page (rfile_name);
   return tid;
@@ -104,12 +109,10 @@ start_process (void *file_name_)
   /* 2015.10.25. Implement load failed process */
   struct process *p = thread_current()->my_process;
   p->load = success;
-  sema_up(&p->exec_sema);
+  //sema_up(&p->exec_sema);
   if (!success) {
-    /* 2015.10.26. To free PCB */
-    sema_up(&p->wait_sema);
-    sema_up(&p->exit_sema);
     thread_exit ();
+    /* 2015.10.27. New algorithm need to free for fail process */
   } else {
     p->exec_file = filesys_open(file_name);
     if(p->exec_file != NULL) {
@@ -145,14 +148,13 @@ process_wait (tid_t child_tid UNUSED)
   if ( p == NULL ) {
     return -1;
   }
-  sema_up(&p->wait_sema);
-
-  /* 2015.10.26. Wait until child ready to exit */
-  sema_down(&p->status_sema);
 
   int result = p->status;
-  sema_up(&p->exit_sema);
-  //palloc_free_page(p);
+
+  /* 2015.10.27. Free child process */
+  close_all_file (p);
+  list_remove(&p->child_elem);
+  palloc_free_page(p);
   
   return result;
 }
@@ -171,23 +173,19 @@ process_exit (void)
     file_close (p->exec_file);
   }
 
-  /* 2015.10.26. Wait until parent get this child */
-  sema_down(&p->wait_sema);
-  list_remove(&cur->childelem);
-  sema_up(&p->status_sema);
+  /* 2015.10.27. Notice to parent child process is finished */
+  //sema_up(&p->status_sema);
+  p->exit = 1;
+  sema_up(&p->exec_sema);
 
-  /* Wait until parent get its status */
-  sema_down(&p->exit_sema); 
 
-  /* 2015.10.26. Destroy all children */
+ /* 2015.10.26. Destroy all children */
   while (!list_empty(&cur->children)){
     struct list_elem *e = list_pop_front (&cur->children);
-    struct thread *t = list_entry (e, struct thread, childelem);
-    struct process *cp = t->my_process;
+    //struct thread *t = list_entry (e, struct thread, childelem);
+    struct process *cp = list_entry (e, struct process, child_elem);
     palloc_free_page(cp);
-    palloc_free_page(t);
   }
-
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -205,7 +203,7 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-  palloc_free_page(p);
+  //palloc_free_page(p);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -620,14 +618,13 @@ install_page (void *upage, void *kpage, bool writable)
 struct process* get_process_by_tid (tid_t tid) {
   struct thread *t = thread_current();
   struct list_elem *e;
-
   for (e = list_begin (&t->children); e != list_end (&t->children); e = list_next (e)){
-    struct thread *child = list_entry (e, struct thread, childelem);
-    if (tid == child->tid) {
-      return child->my_process;
+    //struct thread *child = list_entry (e, struct thread, childelem);
+    struct process *child = list_entry (e, struct process, child_elem);
+    if (tid == child->pid) {
+      return child;
     }
   }
-
   return NULL;
 }
 /* 2015.10.13. Get process using pid (e) */
