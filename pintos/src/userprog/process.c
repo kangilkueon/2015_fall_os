@@ -54,7 +54,7 @@ process_execute (const char *file_name)
   /* 2015.10.13. Make thread name exclude argument (s) */
   rfile_name = strtok_r(rfile_name, " ", &save_ptr);
   tid = thread_create (rfile_name, PRI_DEFAULT, start_process, fn_copy);
-  
+    
   /* 2015.10.25. Implement load failed process */
   struct process *cp = get_process_by_tid(tid);
   if (cp == NULL) {
@@ -66,17 +66,12 @@ process_execute (const char *file_name)
   if(cp->exit == 0) {
     sema_down(&cp->exec_sema);
   }
-//printf("[Who is first?[%d]] process execute\n", cp->pid);
-//printf("[You already have status? [%d]\n", cp->status);
 
   if (!cp->load) {
     tid = TID_ERROR;
   }
 
   if (tid == TID_ERROR) {
-    close_all_file(cp);
-    list_remove (&cp->child_elem);
-    palloc_free_page (cp);
     palloc_free_page (fn_copy); 
   }
   palloc_free_page (rfile_name);
@@ -111,15 +106,9 @@ start_process (void *file_name_)
   /* 2015.10.25. Implement load failed process */
   struct process *p = thread_current()->my_process;
   p->load = success;
-  //sema_up(&p->exec_sema);
+
   if (!success) {
     thread_exit ();
-    /* 2015.10.27. New algorithm need to free for fail process */
-  } else {
-    p->exec_file = filesys_open(file_name);
-    if(p->exec_file != NULL) {
-      file_deny_write(p->exec_file);
-    }
   }
   palloc_free_page (file_name);
 
@@ -152,12 +141,8 @@ process_wait (tid_t child_tid UNUSED)
   }
 
   int result = p->status;
-
-  /* 2015.10.27. Free child process */
-  close_all_file (p);
-  list_remove(&p->child_elem);
-  palloc_free_page(p);
-  
+  /* 2015.10.30. Notice to child that parent finished the read child's status */
+  sema_up(&p->exit_sema);
   return result;
 }
 
@@ -173,10 +158,10 @@ process_exit (void)
   /* 2015.10.19. Notice to parent for it is finished */
   if(p->exec_file != NULL) {
     file_close (p->exec_file);
+    p->exec_file = NULL;
   }
 
   /* 2015.10.27. Notice to parent child process is finished */
-  //sema_up(&p->status_sema);
   p->exit = 1;
   sema_up(&p->exec_sema);
 
@@ -184,10 +169,14 @@ process_exit (void)
  /* 2015.10.26. Destroy all children */
   while (!list_empty(&cur->children)){
     struct list_elem *e = list_pop_front (&cur->children);
-    //struct thread *t = list_entry (e, struct thread, childelem);
     struct process *cp = list_entry (e, struct process, child_elem);
-    palloc_free_page(cp);
+    /* 2015.10.30. If parent exit before the child exit, semaphore has to pass */
+    sema_up(&cp->exit_sema);
   }
+
+  /* 2015.10.30. Wait until parent read its status */
+  sema_down(&p->exit_sema);
+  list_remove(&p->child_elem);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -205,7 +194,7 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-  //palloc_free_page(p);
+  free(p);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -308,6 +297,7 @@ load (const char *file_name, void (**eip) (void), void **esp, char **save_ptr)
   bool success = false;
   int i;
 
+  lock_acquire(&filesys_lock);
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL) 
@@ -321,6 +311,11 @@ load (const char *file_name, void (**eip) (void), void **esp, char **save_ptr)
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+
+  /* 2015.10.29. Change file_deny location */
+  file_deny_write(file);
+  struct process *p = t->my_process;
+  p->exec_file = file;
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -406,7 +401,8 @@ load (const char *file_name, void (**eip) (void), void **esp, char **save_ptr)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+ // file_close (file);
+  lock_release(&filesys_lock);
   return success;
 }
 
@@ -550,43 +546,35 @@ setup_stack (void **esp, char *file_name, char **save_ptr)
           argv_esp[i] = (uint32_t) *esp;
           memcpy(*esp, argv[i] , strlen(argv[i]) + 1);
         }
-//printf("Addr :: %x\n", *esp);
         
         /* word align */
         *esp = (uint32_t) *esp & 0xfffffffc;
-        size_t size = 4;//sizeof(uint8_t);
+        size_t size = 4;
         *esp = *esp - size;
         *(uint32_t*)(*esp) = 0;
-//printf("Addr :: %x\n", *esp);
 
         /* for argv[i] */
         size = sizeof(char *);
         *esp = *esp - size;
         for ( i = argc - 1; i >= 0; i--){
           *esp = *esp - size;
-          *(uint32_t*)(*esp) = argv_esp[i];// memcpy (*esp, &argv_esp[i], size);
+          *(uint32_t*)(*esp) = argv_esp[i];
         }
-//printf("Addr :: %x\n", *esp);
 
         /* for argv */
         size = sizeof(char **);
         *esp = *esp - size;
         *(uint32_t*)(*esp) = (uint32_t) *esp + size;
-//printf("Addr :: %x\n", *esp);
 
         /* for argc */
         size = sizeof(int);
         *esp = *esp - size;
-       // memcpy(*esp, &argc, size);
         *(uint32_t*)(*esp) =argc;
-//printf("Addr :: %x\n", *esp);
 
         /* for return address */
         size = sizeof(void *);
         *esp = *esp - size;
-        //memcpy(*esp, "0", size);
         *(uint32_t*)(*esp) = 0;
-//printf("Addr :: %x\n", *esp);
         /* 2015.10.04. Add for argument passing (e) */
       }
       else
@@ -618,10 +606,12 @@ install_page (void *upage, void *kpage, bool writable)
 /* 2015.10.13. Get process using pid (s)
    Search list of child process and return it */
 struct process* get_process_by_tid (tid_t tid) {
+  if (tid == TID_ERROR)
+    return NULL;
+
   struct thread *t = thread_current();
   struct list_elem *e;
   for (e = list_begin (&t->children); e != list_end (&t->children); e = list_next (e)){
-    //struct thread *child = list_entry (e, struct thread, childelem);
     struct process *child = list_entry (e, struct process, child_elem);
     if (tid == child->pid) {
       return child;
@@ -630,3 +620,29 @@ struct process* get_process_by_tid (tid_t tid) {
   return NULL;
 }
 /* 2015.10.13. Get process using pid (e) */
+
+/* 2015.10.22. Find file in the process by fd */
+struct process_file* get_file_by_fd(int fd){
+  struct thread *cur = thread_current ();
+  struct process *p = cur->my_process;
+
+  struct list_elem *e;
+  for (e = list_begin (&p->file_list); e != list_end (&p->file_list); e = list_next (e)){
+    struct process_file *pf = list_entry (e, struct process_file, elem);
+    if (fd == pf->fd) {
+      return pf;
+    }
+  }
+
+  return NULL;
+}
+
+/* close all file which is opened by process p */
+void close_all_file (struct process *p) {
+  while (!list_empty(&p->file_list)) {
+    struct list_elem *e = list_pop_front(&p->file_list);
+    struct process_file *pf = list_entry (e, struct process_file, elem);
+    file_close(pf->file);
+    free(pf);
+  }
+}

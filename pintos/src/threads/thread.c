@@ -96,6 +96,11 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  
+  /* 2015.10.30. Initialize filesys_lock */
+  #ifdef USERPROG
+  lock_init (&filesys_lock);
+  #endif
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -206,7 +211,8 @@ thread_create (const char *name, int priority,
   /* 2015.10.13. Initialize process (s) */
   #ifdef USERPROG
   struct process *p;
-  p = palloc_get_page (PAL_ZERO);
+  //p = palloc_get_page (PAL_ZERO);
+  p = malloc(sizeof(struct process));
   if (p == NULL) {
     palloc_free_page(t);
     return TID_ERROR;
@@ -218,10 +224,10 @@ thread_create (const char *name, int priority,
   p->fd = 2;
   p->my_thread = t;
   p->exit = 0;
-  p->free_and_remove = 0;
 
   //sema_init(&p->status_sema, 0);
   sema_init(&p->exec_sema, 0);
+  sema_init(&p->exit_sema, 0);
 
   t->my_process = p;
   t->parent = thread_current();

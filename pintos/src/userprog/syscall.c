@@ -1,5 +1,6 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
+#include <string.h>
 #include <syscall-nr.h>
 #include "userprog/process.h"
 #include "threads/interrupt.h"
@@ -9,9 +10,6 @@
 #include "devices/shutdown.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
-
-struct lock filesys_lock;
-
 
 void sys_exit(int status);
 tid_t sys_exec(char *cmd_line);
@@ -25,9 +23,6 @@ void sys_seek(int fd, unsigned position);
 unsigned sys_tell(int fd);
 void sys_close(int fd);
 
-//void close_all_file(struct process *p);
-
-
 
 static void syscall_handler (struct intr_frame *);
 tid_t sys_exec(char *cmd_line);
@@ -35,7 +30,6 @@ tid_t sys_exec(char *cmd_line);
 void
 syscall_init (void) 
 {
-  lock_init(&filesys_lock);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -61,7 +55,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     case SYS_EXEC: {
       uint32_t *addr = check_and_get_arg(f->esp, 1);
-      char *cmd_line = *addr;
+      char *cmd_line = (char *) *addr;
       f->eax = sys_exec((const char *) cmd_line);
       break;
     }
@@ -84,7 +78,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       uint32_t *addr = check_and_get_arg(f->esp, 1);
       check_user_memory_access((void *) addr);
 
-      char *file = *addr;
+      char *file = (char *) *addr;
       f->eax = sys_remove((const char *) file);
       break;
     }
@@ -92,7 +86,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       uint32_t *addr = check_and_get_arg(f->esp, 1);
       check_user_memory_access((void *) addr);
 
-      char *file = *addr;
+      char *file = (char *) *addr;
       f->eax = sys_open((const char *) file);
       break;
     }
@@ -219,8 +213,7 @@ int sys_open(const char *file){
   int fd = 0;
   struct process *p = thread_current()->my_process;
   fd = p->fd;
-//if(fd > 40) return -1;
-  struct process_file *pf = palloc_get_page(0);
+  struct process_file *pf = (struct process_file *) malloc(sizeof(struct process_file));
   if(pf == NULL) {
     return -1;
   }
@@ -315,7 +308,8 @@ void sys_close(int fd){
   lock_acquire(&filesys_lock);
   file_close(pf->file);
   list_remove(&pf->elem);
-  palloc_free_page(pf);
+  free(pf);
+
   lock_release(&filesys_lock);
 }
 
@@ -332,7 +326,7 @@ void check_user_memory_access(void* addr){
   if(addr == NULL || !is_user_vaddr(addr)){
     sys_exit(-1);
   } else {
-    void *page = pagedir_get_page(thread_current()->pagedir, addr);
+    void *page = (void *) pagedir_get_page(thread_current()->pagedir, addr);
 
     if(!page) {
       sys_exit(-1);
@@ -342,27 +336,3 @@ void check_user_memory_access(void* addr){
 }
 /* 2015.10.14. User Memory Access (e) */
 
-/* 2015.10.22. Find file in the process by fd */
-struct process_file* get_file_by_fd(int fd){
-  struct thread *cur = thread_current ();
-  struct process *p = cur->my_process;
-
-  struct list_elem *e;
-  for (e = list_begin (&p->file_list); e != list_end (&p->file_list); e = list_next (e)){
-    struct process_file *pf = list_entry (e, struct process_file, elem);
-    if (fd == pf->fd) {
-      return pf;
-    }
-  }
-
-  return NULL;
-}
-
-void close_all_file (struct process *p) {
-  while (!list_empty(&p->file_list)) {
-    struct list_elem *e = list_pop_front(&p->file_list);
-    struct process_file *pf = list_entry (e, struct process_file, elem);
-    file_close(pf->file);
-    palloc_free_page(pf);
-  }
-}
