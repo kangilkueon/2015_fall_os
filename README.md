@@ -2,5 +2,5 @@
 
 - Pintos Project
   - Project 1 (9/7 ~ 9/30)
-  - Project 2 (10/2 ~ )
-
+  - Project 2 (10/2 ~ 10/30)
+  - Project 3 (11/17 ~ )
