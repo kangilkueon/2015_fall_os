@@ -42,6 +42,8 @@ struct lock filesys_lock;
 struct process* get_process_by_tid (tid_t tid);
 struct process_file* get_file_by_fd(int fd);
 void close_all_file (struct process *p);
+
+
 /* 2015.10.13 Process structure (e) */
 
 #endif /* userprog/process.h */

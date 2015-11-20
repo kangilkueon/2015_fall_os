@@ -103,6 +103,8 @@ main (void)
 #ifdef USERPROG
   tss_init ();
   gdt_init ();
+  /* 2015.11.20. initialize frame table */
+  frame_init ();
 #endif
 
   /* Initialize interrupt handlers. */
