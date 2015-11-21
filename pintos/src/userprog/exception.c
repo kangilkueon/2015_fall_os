@@ -4,7 +4,9 @@
 #include "userprog/gdt.h"
 #include "userprog/syscall.h"
 #include "threads/interrupt.h"
+#include "threads/palloc.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -112,6 +114,8 @@ kill (struct intr_frame *f)
     }
 }
 
+static bool install_page (void *upage, void *kpage, bool writable);
+
 /* Page fault handler.  This is a skeleton that must be filled in
    to implement virtual memory.  Some solutions to project 2 may
    also require modifying this code.
@@ -152,6 +156,16 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
+  /* 2015.11.21. Stack growth */
+  if (user && not_present && is_user_vaddr (fault_addr)) {
+    uint32_t kpage = palloc_get_page_with_frame(PAL_USER);
+//printf("## stack growth!! \n");
+    if (kpage != NULL) {
+      bool success = install_page ((uint32_t) fault_addr, kpage, true);
+      if (success)
+        return;
+    }
+  }
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
@@ -161,5 +175,16 @@ page_fault (struct intr_frame *f)
           write ? "writing" : "reading",
           user ? "user" : "kernel");
   kill (f);
+}
+
+static bool
+install_page (void *upage, void *kpage, bool writable)
+{
+  struct thread *t = thread_current ();
+
+  /* Verify that there's not already a page at that virtual
+     address, then map our page there. */
+  return (pagedir_get_page (t->pagedir, upage) == NULL
+          && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
 
