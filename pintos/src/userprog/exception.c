@@ -161,7 +161,7 @@ page_fault (struct intr_frame *f)
     uint32_t kpage = palloc_get_page_with_frame(PAL_USER);
 //printf("## stack growth!! \n");
     if (kpage != NULL) {
-      bool success = install_page ((uint32_t) fault_addr, kpage, true);
+      bool success = install_page (pg_round_down(fault_addr), kpage, true);
       if (success)
         return;
     }

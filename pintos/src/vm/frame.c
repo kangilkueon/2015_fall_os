@@ -3,9 +3,6 @@
 #include "lib/kernel/hash.h"
 #include "threads/synch.h"
 
-struct lock frame_lock;
-struct hash frame_hash;
-
 void frame_init () {
   lock_init(&frame_lock);
   hash_init(&frame_hash, frame_hash_func, frame_hash_less, NULL);
