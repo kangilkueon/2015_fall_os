@@ -99,13 +99,16 @@ start_process (void *file_name_)
   file_name = strtok_r (file_name_, " ", &save_ptr);
   /* 2015.10.02. Add for argument passing (e) */
 
+  /* 2015.11.24. Initialize page table */
+  struct process *p = thread_current()->my_process;
+  spt_init(&p->spt);
+
   success = load (file_name, &if_.eip, &if_.esp, &save_ptr);
 
   /* For Debug hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true); */
   /* If load failed, quit. */
 
   /* 2015.10.25. Implement load failed process */
-  struct process *p = thread_current()->my_process;
   p->load = success;
 
   if (!success) {

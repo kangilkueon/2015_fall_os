@@ -1,9 +1,11 @@
 #ifndef USERPROG_PROCESS_H
 #define USERPROG_PROCESS_H
 
+#include <hash.h>
 #include "filesys/file.h"
 #include "threads/thread.h"
 #include "threads/synch.h"
+#include "vm/page.h"
 
 tid_t process_execute (const char *file_name);
 int process_wait (tid_t);
@@ -28,6 +30,9 @@ struct process {
   /* 2015.10.27. To preserve PCB when thread destroy */
   struct list_elem child_elem;
   int exit;
+
+  /* 2015.11.24. Add Page Table */
+  struct hash spt;
 };
 
 /* 2015.10.22. To File System */

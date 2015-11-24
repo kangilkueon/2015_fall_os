@@ -3,8 +3,8 @@
 #include "lib/kernel/hash.h"
 
 
-void spt_init () {
-  hash_init(&s_page_table_hash, s_page_table_hash_func, s_page_table_hash_less, NULL);
+void spt_init (struct hash *spt) {
+  hash_init(&spt, s_page_table_hash_func, s_page_table_hash_less, NULL);
 }
 
 struct s_page_table* s_page_table_init (void* addr) {

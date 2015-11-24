@@ -105,7 +105,6 @@ main (void)
   gdt_init ();
   /* 2015.11.20. initialize frame table */
   frame_init ();
-  spt_init();
 #endif
 
   /* Initialize interrupt handlers. */
