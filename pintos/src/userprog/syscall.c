@@ -22,6 +22,8 @@ int sys_write(int fd, const void *buffer, unsigned size);
 void sys_seek(int fd, unsigned position);
 unsigned sys_tell(int fd);
 void sys_close(int fd);
+int sys_mmap (int fd, void *addr);
+void sys_munmap (int mapping);
 
 
 static void syscall_handler (struct intr_frame *);
@@ -142,6 +144,24 @@ syscall_handler (struct intr_frame *f UNUSED)
       uint32_t *addr = check_and_get_arg(f->esp, 1);
       int fd = *addr;
       sys_close(fd);
+      break;
+    }
+    case SYS_MMAP : {
+      uint32_t *addr = check_and_get_arg(f->esp, 1);
+      uint32_t* addr2 = check_and_get_arg(f->esp, 2);
+
+      int fd = *addr;
+      void* t_addr = *(addr2);
+
+      f->eax = sys_mmap (fd, t_addr);
+      break;
+    }
+    case SYS_MUNMAP : {
+      uint32_t *addr = check_and_get_arg(f->esp, 1);
+
+      int mapping = *addr;
+
+      sys_munmap (mapping);
       break;
     }
   }
@@ -311,6 +331,60 @@ void sys_close(int fd){
   free(pf);
 
   lock_release(&filesys_lock);
+}
+
+/* 2015.11.25. Memeory Mapped File */
+int sys_mmap (int fd, void *addr) {
+  /* Handling error data */
+  if (fd == 0 || fd == 1) {
+    return -1;
+  }
+
+  if (!addr || ((uint32_t) addr & PGSIZE) != 0) {
+    return -1;
+  }
+
+  struct process_file *pf = get_file_by_fd (fd);
+  if (pf == NULL) {
+    return -1;
+  }
+  
+  size_t read_bytes = file_length (pf->file);
+  if (read_bytes <= 0) {
+    return -1;
+  }
+
+  struct process *p = thread_current ()->my_process;
+  int map_id = p->map_id;
+
+  lock_acquire(&filesys_lock);
+  /* Start logic */
+  size_t ofs = 0;
+  while (read_bytes > 0) {
+    size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+    size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+      /* 2015.11.24. Implement on-demand loading */
+      bool success = create_s_page(addr, pf->file, ofs, page_read_bytes, page_zero_bytes, true);
+      if (!success) {
+        printf("fail to allocate supplemental page\n");
+      }
+
+      /* Advance. */
+      read_bytes -= page_read_bytes;
+      ofs += page_read_bytes;
+  }
+
+  struct mmap_file *mf = (struct mmap_file *) malloc(sizeof(struct mmap_file));
+  mf->map_id = map_id;
+  list_push_back(&p->mmap_list, &mf->elem);
+  p->map_id = map_id + 1;
+  lock_release(&filesys_lock);
+  return map_id;
+}
+
+void sys_munmap (int mapping) {
+
 }
 
 /* 2015.10.14. User Memory Access (s) */

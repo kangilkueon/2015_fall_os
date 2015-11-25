@@ -231,6 +231,10 @@ enum intr_level old_level = intr_disable();
   sema_init(&p->exec_sema, 0);
   sema_init(&p->exit_sema, 0);
 
+  /* 2015.11.25. Memory Mapped File */
+  p->map_id = 1;
+  list_init (&p->mmap_list);
+
   t->my_process = p;
   t->parent = thread_current();
 

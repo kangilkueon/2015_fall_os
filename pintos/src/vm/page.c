@@ -69,12 +69,11 @@ bool load_segment_by_s_page (void* addr) {
   }
 
   /* Get a page of memory. */
-//  uint8_t *kpage = palloc_get_page (PAL_USER);
   if (kpage == NULL)
     return false;
 
   /* Load this page. */
-file_seek(sp->file, sp->offset);
+  file_seek(sp->file, sp->offset);
   if (file_read (sp->file, kpage, sp->page_read_bytes) != (int) sp->page_read_bytes) {
     palloc_free_page_with_frame (kpage);
     return false; 

@@ -33,6 +33,10 @@ struct process {
 
   /* 2015.11.24. Add Page Table */
   struct hash spt;
+
+  /* 2015.11.25. Memory Mapped Files */
+  struct list mmap_list; 
+  int map_id;
 };
 
 /* 2015.10.22. To File System */
@@ -40,6 +44,13 @@ struct process_file {
   int fd;
   struct file *file;
   struct list_elem elem;
+};
+
+/* 2015.11.25. Memeory Mapped File */
+struct mmap_file {
+  int map_id;
+  struct list_elem elem;
+  struct s_page *sp;
 };
 
 struct lock filesys_lock;
