@@ -271,6 +271,7 @@ int sys_read(int fd, void *buffer, unsigned size) {
     return -1;
   }
   lock_acquire(&filesys_lock);
+//TODO printf("Error occrue here\n")
   int result = file_read(pf->file, buffer, size);
   lock_release(&filesys_lock);
   return result;

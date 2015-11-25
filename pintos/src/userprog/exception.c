@@ -14,6 +14,7 @@ static long long page_fault_cnt;
 
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
+static bool check_valid_fault_addr(void *addr);
 
 /* Registers handlers for interrupts that can be caused by user
    programs.
@@ -156,15 +157,15 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 
   /* 2015.11.24. Suplement page loading */
-  if (user && not_present) {
+  if (user && not_present && check_valid_fault_addr(fault_addr)) {
     bool success = load_segment_by_s_page (pg_round_down(fault_addr));
     if (success) {
       return;
     }
   }
-      
+  
   /* 2015.11.21. Stack growth */
-  if (user && is_user_vaddr (fault_addr)) {
+  if (user && is_user_vaddr (fault_addr) && check_valid_fault_addr(fault_addr)) {
     uint32_t *kpage = palloc_get_page_with_frame(PAL_USER);
     if (kpage != NULL) {
       bool success = install_page (pg_round_down(fault_addr), kpage, true);
@@ -181,4 +182,12 @@ page_fault (struct intr_frame *f)
           write ? "writing" : "reading",
           user ? "user" : "kernel");
   kill (f);
+}
+
+static bool 
+check_valid_fault_addr(void *addr) {
+  if (addr == NULL || addr == 0) {
+    return false;
+  }
+  return true;
 }
