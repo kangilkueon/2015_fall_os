@@ -7,6 +7,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "vm/page.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -114,8 +115,6 @@ kill (struct intr_frame *f)
     }
 }
 
-static bool install_page (void *upage, void *kpage, bool writable);
-
 /* Page fault handler.  This is a skeleton that must be filled in
    to implement virtual memory.  Some solutions to project 2 may
    also require modifying this code.
@@ -156,10 +155,17 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
+  /* 2015.11.24. Suplement page loading */
+  if (user && not_present) {
+    bool success = load_segment_by_s_page (pg_round_down(fault_addr));
+    if (success) {
+      return;
+    }
+  }
+      
   /* 2015.11.21. Stack growth */
-  if (user && not_present && is_user_vaddr (fault_addr)) {
-    uint32_t kpage = palloc_get_page_with_frame(PAL_USER);
-//printf("## stack growth!! \n");
+  if (user && is_user_vaddr (fault_addr)) {
+    uint32_t *kpage = palloc_get_page_with_frame(PAL_USER);
     if (kpage != NULL) {
       bool success = install_page (pg_round_down(fault_addr), kpage, true);
       if (success)
@@ -176,15 +182,3 @@ page_fault (struct intr_frame *f)
           user ? "user" : "kernel");
   kill (f);
 }
-
-static bool
-install_page (void *upage, void *kpage, bool writable)
-{
-  struct thread *t = thread_current ();
-
-  /* Verify that there's not already a page at that virtual
-     address, then map our page there. */
-  return (pagedir_get_page (t->pagedir, upage) == NULL
-          && pagedir_set_page (t->pagedir, upage, kpage, writable));
-}
-

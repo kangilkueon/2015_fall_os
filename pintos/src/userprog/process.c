@@ -19,6 +19,7 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "vm/frame.h"
+#include "vm/page.h"
 
 static thread_func start_process NO_RETURN;   
 /* 2015.10.04. Modify for argument passing */
@@ -31,6 +32,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp, char **s
 tid_t
 process_execute (const char *file_name) 
 {
+enum intr_level old_level = intr_disable();
   char *fn_copy;
   char *rfile_name;
   char *save_ptr;
@@ -76,6 +78,7 @@ process_execute (const char *file_name)
     palloc_free_page (fn_copy); 
   }
   palloc_free_page (rfile_name);
+intr_set_level(old_level);
   return tid;
 }
 
@@ -412,7 +415,7 @@ load (const char *file_name, void (**eip) (void), void **esp, char **save_ptr)
 
 /* load() helpers. */
 
-static bool install_page (void *upage, void *kpage, bool writable);
+//static bool install_page (void *upage, void *kpage, bool writable);
 
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
@@ -490,35 +493,42 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      /* Get a page of memory. */
+      /* 2015.11.24. Implement on-demand loading */
+      bool success = create_s_page(upage, file, ofs, page_read_bytes, page_zero_bytes, writable);
+      if (!success) {
+        printf("fail to allocate supplemental page\n");
+      }
+      /*
+      /* Get a page of memory. 
       /* 2015.11.20. project 3, change function for frame table 
-      uint8_t *kpage = palloc_get_page (PAL_USER); */
+      uint8_t *kpage = palloc_get_page (PAL_USER); 
       uint8_t *kpage = palloc_get_page_with_frame (PAL_USER);
       if (kpage == NULL)
         return false;
 
-      /* Load this page. */
+      /* Load this page. 
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
           /* 2015.11.20. project 3, change function for frame table 
-          palloc_free_page (kpage); */
+          palloc_free_page (kpage); 
           palloc_free_page_with_frame (kpage);
           return false; 
-        }
+        
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
-      /* Add the page to the process's address space. */
+      /* Add the page to the process's address space. 
       if (!install_page (upage, kpage, writable)) 
         {
           /* 2015.11.20. project 3, change function for frame table 
-          palloc_free_page (kpage); */
+          palloc_free_page (kpage); 
           palloc_free_page_with_frame (kpage);
           return false; 
         }
-
+     */
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
+      ofs += page_read_bytes;
       upage += PGSIZE;
     }
   return true;
@@ -607,7 +617,7 @@ setup_stack (void **esp, char *file_name, char **save_ptr)
    with palloc_get_page().
    Returns true on success, false if UPAGE is already mapped or
    if memory allocation fails. */
-static bool
+bool
 install_page (void *upage, void *kpage, bool writable)
 {
   struct thread *t = thread_current ();
