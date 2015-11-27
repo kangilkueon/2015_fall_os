@@ -46,9 +46,14 @@ bool create_s_page(void *page, struct file *file, size_t offset, size_t page_rea
   sp->page_read_bytes = page_read_bytes;
   sp->page_zero_bytes = page_zero_bytes;
   sp->writable = writable;
+  sp->is_load = false;
 
   struct thread *curr = thread_current();
-  hash_insert(&curr->my_process->spt, &sp->hash_elem);
+  //hash_insert(&curr->my_process->spt, &sp->hash_elem);
+
+  if (hash_insert(&curr->my_process->spt, &sp->hash_elem) != NULL) {
+    return false;
+  }
 
   return true;
 }
@@ -56,31 +61,23 @@ bool create_s_page(void *page, struct file *file, size_t offset, size_t page_rea
 bool load_segment_by_s_page (void* addr) {
   /* Get page from page table */
   uint8_t *kpage = palloc_get_page_with_frame(PAL_USER);
-  struct s_page *sp = (struct s_page *) malloc(sizeof(struct s_page));
-  sp->page = addr;
-  struct hash_elem *e = hash_find(&thread_current()->my_process->spt, &sp->hash_elem);
-  if (e == NULL) {
-    return false;
-  }
-  free(sp);
-  sp = hash_entry (e, struct s_page, hash_elem);
+  struct s_page *sp = get_s_page (addr);
   if (sp == NULL) {
-    printf("thread is no page\n");
+    free(sp);
     return false;
   }
 
   /* Get a page of memory. */
   if (kpage == NULL) {
-    printf("## Kpage is NULL\n");
+    free(sp);
     return false;
   }
   lock_acquire(&filesys_lock);
   /* Load this page. */
   file_seek(sp->file, sp->offset);
   if (file_read (sp->file, kpage, sp->page_read_bytes) != (int) sp->page_read_bytes) {
-//  if (file_read_at (sp->file, kpage, sp->page_read_bytes, sp->offset) != (int) sp->page_read_bytes) {
     palloc_free_page_with_frame (kpage);
-    printf("## file read failed\n");
+    free(sp);
     lock_release(&filesys_lock);
     return false; 
   }
@@ -89,25 +86,36 @@ bool load_segment_by_s_page (void* addr) {
   /* Add the page to the process's address space. */
   if (!install_page (sp->page, kpage, sp->writable)) {
     palloc_free_page_with_frame (kpage);
+    free(sp);
     return false; 
   }
+  sp->is_load = true;
   return true;
 }
 
 void clear_s_page (void* page) {
-  struct s_page *sp = (struct s_page *) malloc(sizeof(struct s_page));
-  sp->page = page;
-  struct hash_elem *e = hash_find(&thread_current()->my_process->spt, &sp->hash_elem);
-  if (e == NULL) {
-    return;
-  }
-  free(sp);
-  sp = hash_entry (e, struct s_page, hash_elem);
+  struct s_page *sp = get_s_page (page);
   if (sp == NULL) {
-    printf("thread is no page\n");
     return;
   }
+  if (sp->is_load) 
+  if(pagedir_is_dirty(thread_current()->pagedir, sp->page)){// || pagedir_is_dirty(thread_current()->pagedir, pagedir_get_page(thread_current()->pagedir, sp->page))) {
+    file_write_at (sp->file, sp->page, PGSIZE, 0);
+  }
+  palloc_free_page_with_frame (pagedir_get_page (thread_current ()->pagedir, sp->page));
   pagedir_clear_page (thread_current ()->pagedir, sp->page);
   hash_delete (&thread_current ()->my_process->spt, &sp->hash_elem);
   free (sp);
+}
+
+struct s_page* get_s_page(void *addr) {
+  struct s_page *sp = (struct s_page *) malloc(sizeof(struct s_page));
+  sp->page = addr;
+  struct hash_elem *e = hash_find(&thread_current()->my_process->spt, &sp->hash_elem);
+  if (e == NULL) {
+    return NULL;
+  }
+  free(sp);
+  sp = hash_entry (e, struct s_page, hash_elem);
+  return sp;
 }

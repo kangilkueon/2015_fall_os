@@ -20,10 +20,13 @@ struct s_page {
   size_t page_zero_bytes;
 
   bool writable;
+  bool is_load;
 };
 
 bool create_s_page(void *page, struct file *file, size_t offset, size_t page_read_bytes, size_t page_zero_bytes, bool writable);
 bool load_segment_by_s_page (void *addr);
 void clear_s_page (void *page);
+
+struct s_page* get_s_page (void *addr);
 
 #endif

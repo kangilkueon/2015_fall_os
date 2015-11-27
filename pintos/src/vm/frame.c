@@ -31,15 +31,18 @@ palloc_free_page_with_frame (void *addr)
   struct frame_table *ft = (struct frame_table *) malloc(sizeof(struct frame_table));
   ft->page = addr;
 
+  palloc_free_page(addr);
+
   struct hash_elem *he = hash_find (&frame_hash, &ft->hash_elem);
   free (ft);
+  if (he == NULL) {
+    return;
+  }
   ft = hash_entry (he, struct frame_table, hash_elem);
 
   lock_acquire(&frame_lock);
   hash_delete(&frame_hash, &ft->hash_elem);
   lock_release(&frame_lock);
-  
-  palloc_free_page(addr);
 }
 
 unsigned

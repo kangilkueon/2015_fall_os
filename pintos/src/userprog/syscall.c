@@ -43,7 +43,6 @@ syscall_handler (struct intr_frame *f UNUSED)
 
   /* 2015.10.05. Add for System call (s) */
   int argv = *(check_and_get_arg(f->esp, 0));
-
   switch (argv) {
     case SYS_HALT: {
       shutdown_power_off();
@@ -174,6 +173,9 @@ void sys_exit(int status){
 
   /* 2015.10.20. Save status in PCB */
   thread_current()->my_process->status = status;
+
+  /* 2015.11.28. Unmap all */
+  munmap_all();
 
   printf("%s: exit(%d)\n", thread_current()->name, status);
   thread_exit();
@@ -342,7 +344,7 @@ int sys_mmap (int fd, void *addr) {
     return -1;
   }
 
-  if (!addr || ((uint32_t) addr & PGSIZE) != 0) {
+  if (!addr || ((uint32_t) addr % PGSIZE) != 0) {
     return -1;
   }
 
@@ -360,6 +362,9 @@ int sys_mmap (int fd, void *addr) {
   int map_id = p->map_id;
 
   struct file *f = file_reopen(pf->file);
+  if (f == NULL || file_length(f) <= 0) {
+    return -1;
+  }
   /* Start logic */
   size_t ofs = 0;
   while (read_bytes > 0) {
@@ -369,7 +374,7 @@ int sys_mmap (int fd, void *addr) {
       /* 2015.11.24. Implement on-demand loading */
       bool success = create_s_page(addr, f, ofs, page_read_bytes, page_zero_bytes, true);
       if (!success) {
-        printf("fail to allocate supplemental page\n");
+        return -1;
       }
 
       /* Advance. */
@@ -391,6 +396,7 @@ void sys_munmap (int mapping) {
   if (mf == NULL) {
     return;
   }
+  list_remove (&mf->elem);
   clear_s_page (mf->page);
   free(mf);
 }
@@ -409,7 +415,6 @@ void check_user_memory_access(void* addr){
     sys_exit(-1);
   } else {
     void *page = (void *) pagedir_get_page(thread_current()->pagedir, addr);
-
     if(!page) {
       sys_exit(-1);
     }
@@ -418,3 +423,12 @@ void check_user_memory_access(void* addr){
 }
 /* 2015.10.14. User Memory Access (e) */
 
+/* 2015.11.28. mmap all */
+void munmap_all () {
+  int i = 0;
+  struct process *p = thread_current ()->my_process;
+  int map_id = p->map_id;
+  for ( i = 1; i <= map_id; i++ ){
+    sys_munmap(i);
+  }
+}
