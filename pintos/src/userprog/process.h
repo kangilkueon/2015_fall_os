@@ -50,7 +50,7 @@ struct process_file {
 struct mmap_file {
   int map_id;
   struct list_elem elem;
-  struct s_page *sp;
+  void *page;
 };
 
 struct lock filesys_lock;
@@ -62,4 +62,6 @@ void close_all_file (struct process *p);
 
 bool install_page (void *upage, void *kpage, bool writable);
 
+/* 2015.11.27. MMap file */
+struct mmap_file* get_mmap_file_by_mapping (int mapping);
 #endif /* userprog/process.h */

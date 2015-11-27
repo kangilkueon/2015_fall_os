@@ -671,3 +671,18 @@ void close_all_file (struct process *p) {
     free(pf);
   }
 }
+
+struct mmap_file* get_mmap_file_by_mapping (int mapping) {
+  struct process *p = thread_current ()->my_process;
+
+  struct list_elem *e;
+  for (e = list_begin (&p->mmap_list); e != list_end (&p->mmap_list); e = list_next (e)){
+    struct mmap_file *mf = list_entry (e, struct mmap_file, elem);
+    if (mapping == mf->map_id) {
+      return mf;
+    }
+  }
+
+  return NULL;
+}
+

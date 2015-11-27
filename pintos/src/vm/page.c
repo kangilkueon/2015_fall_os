@@ -4,6 +4,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/process.h"
+#include "filesys/file.h"
 #include "lib/kernel/hash.h"
 
 
@@ -69,21 +70,44 @@ bool load_segment_by_s_page (void* addr) {
   }
 
   /* Get a page of memory. */
-  if (kpage == NULL)
+  if (kpage == NULL) {
+    printf("## Kpage is NULL\n");
     return false;
-
+  }
+  lock_acquire(&filesys_lock);
   /* Load this page. */
   file_seek(sp->file, sp->offset);
   if (file_read (sp->file, kpage, sp->page_read_bytes) != (int) sp->page_read_bytes) {
+//  if (file_read_at (sp->file, kpage, sp->page_read_bytes, sp->offset) != (int) sp->page_read_bytes) {
     palloc_free_page_with_frame (kpage);
+    printf("## file read failed\n");
+    lock_release(&filesys_lock);
     return false; 
   }
   memset (kpage + sp->page_read_bytes, 0, sp->page_zero_bytes);
-
+  lock_release(&filesys_lock);
   /* Add the page to the process's address space. */
   if (!install_page (sp->page, kpage, sp->writable)) {
     palloc_free_page_with_frame (kpage);
     return false; 
   }
   return true;
+}
+
+void clear_s_page (void* page) {
+  struct s_page *sp = (struct s_page *) malloc(sizeof(struct s_page));
+  sp->page = page;
+  struct hash_elem *e = hash_find(&thread_current()->my_process->spt, &sp->hash_elem);
+  if (e == NULL) {
+    return;
+  }
+  free(sp);
+  sp = hash_entry (e, struct s_page, hash_elem);
+  if (sp == NULL) {
+    printf("thread is no page\n");
+    return;
+  }
+  pagedir_clear_page (thread_current ()->pagedir, sp->page);
+  hash_delete (&thread_current ()->my_process->spt, &sp->hash_elem);
+  free (sp);
 }

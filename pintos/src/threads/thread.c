@@ -14,6 +14,7 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #include "vm/frame.h"
+#include "vm/swap.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -101,6 +102,7 @@ thread_init (void)
   /* 2015.10.30. Initialize filesys_lock */
   #ifdef USERPROG
   lock_init (&filesys_lock);
+  swap_init ();
   #endif
 
   /* Set up a thread structure for the running thread. */

@@ -321,12 +321,12 @@ unsigned sys_tell(int fd){
 }
 
 void sys_close(int fd){
+  lock_acquire(&filesys_lock);
   struct process_file *pf = get_file_by_fd(fd);
   if (pf == NULL) {
     return;
   }
 
-  lock_acquire(&filesys_lock);
   file_close(pf->file);
   list_remove(&pf->elem);
   free(pf);
@@ -336,6 +336,7 @@ void sys_close(int fd){
 
 /* 2015.11.25. Memeory Mapped File */
 int sys_mmap (int fd, void *addr) {
+  lock_acquire(&filesys_lock);
   /* Handling error data */
   if (fd == 0 || fd == 1) {
     return -1;
@@ -358,7 +359,7 @@ int sys_mmap (int fd, void *addr) {
   struct process *p = thread_current ()->my_process;
   int map_id = p->map_id;
 
-  lock_acquire(&filesys_lock);
+  struct file *f = file_reopen(pf->file);
   /* Start logic */
   size_t ofs = 0;
   while (read_bytes > 0) {
@@ -366,7 +367,7 @@ int sys_mmap (int fd, void *addr) {
     size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
       /* 2015.11.24. Implement on-demand loading */
-      bool success = create_s_page(addr, pf->file, ofs, page_read_bytes, page_zero_bytes, true);
+      bool success = create_s_page(addr, f, ofs, page_read_bytes, page_zero_bytes, true);
       if (!success) {
         printf("fail to allocate supplemental page\n");
       }
@@ -378,6 +379,7 @@ int sys_mmap (int fd, void *addr) {
 
   struct mmap_file *mf = (struct mmap_file *) malloc(sizeof(struct mmap_file));
   mf->map_id = map_id;
+  mf->page = addr;
   list_push_back(&p->mmap_list, &mf->elem);
   p->map_id = map_id + 1;
   lock_release(&filesys_lock);
@@ -385,7 +387,12 @@ int sys_mmap (int fd, void *addr) {
 }
 
 void sys_munmap (int mapping) {
-
+  struct mmap_file *mf = get_mmap_file_by_mapping (mapping);
+  if (mf == NULL) {
+    return;
+  }
+  clear_s_page (mf->page);
+  free(mf);
 }
 
 /* 2015.10.14. User Memory Access (s) */

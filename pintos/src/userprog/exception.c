@@ -165,6 +165,15 @@ page_fault (struct intr_frame *f)
   }
   
   /* 2015.11.21. Stack growth */
+/*
+void *fault_addr2 = pg_round_down(fault_addr);
+printf("Address is %x\n", fault_addr2);
+printf("Address is %x\n", f->esp);
+printf("Check is %d\n", is_user_vaddr(fault_addr2));
+printf("Check is %d\n", fault_addr2 > (PHYS_BASE-262144));
+printf("Check is %d\n", fault_addr2 >= f->esp);
+printf("Check is %d\n", fault_addr2 < PHYS_BASE);
+*/
   if (user && is_user_vaddr (fault_addr) && check_valid_fault_addr(fault_addr)) {
     uint32_t *kpage = palloc_get_page_with_frame(PAL_USER);
     if (kpage != NULL) {
