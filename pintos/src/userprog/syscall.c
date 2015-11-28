@@ -371,27 +371,42 @@ int sys_mmap (int fd, void *addr) {
     size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
     size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      /* 2015.11.24. Implement on-demand loading */
-      bool success = create_s_page(addr, f, ofs, page_read_bytes, page_zero_bytes, true);
-      if (!success) {
-        return -1;
-      }
+    /* 2015.11.24. Implement on-demand loading */
+    bool success = create_s_page(addr, f, ofs, page_read_bytes, page_zero_bytes, true);
+    if (!success) {
+      return -1;
+    }
 
-      /* Advance. */
-      read_bytes -= page_read_bytes;
-      ofs += page_read_bytes;
+    struct mmap_file *mf = (struct mmap_file *) malloc(sizeof(struct mmap_file));
+    mf->map_id = map_id;
+    mf->page = addr;
+    list_push_back(&p->mmap_list, &mf->elem);
+
+    /* Advance. */
+    read_bytes -= page_read_bytes;
+    ofs += page_read_bytes;
+    addr += PGSIZE;
   }
-
-  struct mmap_file *mf = (struct mmap_file *) malloc(sizeof(struct mmap_file));
-  mf->map_id = map_id;
-  mf->page = addr;
-  list_push_back(&p->mmap_list, &mf->elem);
   p->map_id = map_id + 1;
   lock_release(&filesys_lock);
   return map_id;
 }
 
 void sys_munmap (int mapping) {
+  struct process *p = thread_current ()->my_process;
+
+  struct list_elem *e;
+  for (e = list_begin (&p->mmap_list); e != list_end (&p->mmap_list); e = list_next (e)){
+    struct mmap_file *mf = list_entry (e, struct mmap_file, elem);
+    if (mapping == mf->map_id) {
+      e = list_prev (e);
+      list_remove (&mf->elem);
+      clear_s_page (mf->page);
+      free(mf);
+    }
+  }
+
+  /*
   struct mmap_file *mf = get_mmap_file_by_mapping (mapping);
   if (mf == NULL) {
     return;
@@ -399,6 +414,7 @@ void sys_munmap (int mapping) {
   list_remove (&mf->elem);
   clear_s_page (mf->page);
   free(mf);
+  */
 }
 
 /* 2015.10.14. User Memory Access (s) */
