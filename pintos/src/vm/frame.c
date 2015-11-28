@@ -5,6 +5,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
+#include "vm/page.h"
 #include "vm/swap.h"
 
 void frame_init () {
@@ -17,13 +18,22 @@ palloc_get_page_with_frame (enum palloc_flags flags, void* uaddr)
 {
   uint8_t* kpage = palloc_get_page (flags);
   
+  /* 2015.11.28. Implement Swap */
   while (kpage == NULL) {
-    void *victim = get_victim_page ();
-    swap_write (victim);
+    lock_acquire (&frame_lock);
+    void *victim = get_victim_page (); /* Kernel address */
+    void *victim_uaddr = get_uaddr_from_kaddr(victim);
+    if (!update_s_page_swap (victim_uaddr, swap_write (victim))){
+      printf("Palloc in swap error\n");
+      lock_release (&frame_lock);
+      return NULL;
+    }
+    pagedir_clear_page (thread_current ()->pagedir, victim_uaddr);
+    lock_release (&frame_lock);
     palloc_free_page_with_frame (victim);
     kpage = palloc_get_page (flags);
-//    return false;
   }
+
   lock_acquire(&frame_lock);
   struct frame_table *ft = (struct frame_table *) malloc(sizeof(struct frame_table));
   ft->kaddr = kpage;
@@ -70,12 +80,11 @@ get_victim_page (void) {
     if (pagedir_is_accessed (thread_current()->pagedir, ft->uaddr)) {
       pagedir_set_accessed (thread_current()->pagedir, ft->uaddr, false);
     } else {
-      victim = ft->kaddr; //uaddr;
+      victim = ft->kaddr;
       return victim; 
     }
-    //he = hash_next (&i);
   }
-  victim = ft->kaddr;//uaddr;
+  victim = ft->kaddr;
   return victim; 
 }
 
@@ -92,4 +101,18 @@ frame_hash_less (const struct hash_elem *a_, const struct hash_elem *b_, void *a
   const struct frame_table *a = hash_entry (a_, struct frame_table, hash_elem);
   const struct frame_table *b = hash_entry (b_, struct frame_table, hash_elem);
   return a->kaddr < b->kaddr;
+}
+
+void *
+get_uaddr_from_kaddr (void *kaddr) {
+  struct frame_table *ft = (struct frame_table *) malloc(sizeof(struct frame_table));
+  ft->kaddr = kaddr;
+
+  struct hash_elem *he = hash_find (&frame_hash, &ft->hash_elem);
+  free (ft);
+  if (he == NULL) {
+    return NULL;
+  }
+  ft = hash_entry (he, struct frame_table, hash_elem);
+  return (uint32_t *) ft->uaddr;
 }

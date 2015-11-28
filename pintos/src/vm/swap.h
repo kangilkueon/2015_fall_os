@@ -11,5 +11,5 @@ struct bitmap *swap_map;
 struct lock swap_lock;
 
 size_t swap_write (void* addr);
-void swap_read (void);
+void swap_read (void* kpage, size_t swap_loc);
 #endif

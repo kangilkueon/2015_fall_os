@@ -21,4 +21,5 @@ struct frame_table {
 };
 
 void* get_victim_page (void);
+void* get_uaddr_from_kaddr (void *kaddr);
 #endif

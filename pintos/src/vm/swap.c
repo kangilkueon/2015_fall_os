@@ -18,20 +18,31 @@ swap_init(void) {
 size_t swap_write (void* addr) {
   int end_size = PGSIZE / BLOCK_SECTOR_SIZE;
   lock_acquire(&swap_lock);
-  size_t bitmap_loc  = bitmap_scan_and_flip(swap_map, 0, 1, 0);
+  size_t swap_loc  = bitmap_scan_and_flip(swap_map, 0, 1, 0);
 
-  if (bitmap_loc == BITMAP_ERROR) {
+  if (swap_loc == BITMAP_ERROR) {
     lock_release(&swap_lock);
     return 0;
   }
-  size_t i;
+  int i;
   for (i = 0; i < end_size; i++) { 
-    block_write(swap_block, bitmap_loc * end_size + i, (uint8_t *) addr + i * BLOCK_SECTOR_SIZE);
+    block_write(swap_block, swap_loc * end_size + i, (uint8_t *) addr + i * BLOCK_SECTOR_SIZE);
   }
   lock_release(&swap_lock);
-  return bitmap_loc;
+  return swap_loc;
 }
 
-void swap_read (void) {
- 
+void swap_read (void *kpage, size_t swap_loc) {
+  int end_size = PGSIZE / BLOCK_SECTOR_SIZE;
+  lock_acquire(&swap_lock);
+  if (bitmap_test(swap_map, swap_loc) == 0) {
+    lock_release(&swap_lock);
+    return;
+  }
+  bitmap_flip(swap_map, swap_loc);
+  int i;
+  for (i = 0; i < end_size; i++) {
+    block_read(swap_block, swap_loc * end_size + i, (uint8_t *) kpage + i * BLOCK_SECTOR_SIZE);
+  } 
+  lock_release(&swap_lock);
 }
