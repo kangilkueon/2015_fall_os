@@ -544,7 +544,7 @@ setup_stack (void **esp, char *file_name, char **save_ptr)
 
   /* 2015.11.20. project 3, change function for frame table 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO); */
-  kpage = palloc_get_page_with_frame (PAL_USER | PAL_ZERO);
+  kpage = palloc_get_page_with_frame (PAL_USER | PAL_ZERO, ((uint8_t *) PHYS_BASE) - PGSIZE);
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);

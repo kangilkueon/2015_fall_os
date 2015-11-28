@@ -60,7 +60,7 @@ bool create_s_page(void *page, struct file *file, size_t offset, size_t page_rea
 
 bool load_segment_by_s_page (void* addr) {
   /* Get page from page table */
-  uint8_t *kpage = palloc_get_page_with_frame(PAL_USER);
+  uint8_t *kpage = palloc_get_page_with_frame(PAL_USER, addr);
   struct s_page *sp = get_s_page (addr);
   if (sp == NULL) {
     free(sp);
