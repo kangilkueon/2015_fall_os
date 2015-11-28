@@ -25,6 +25,7 @@ void sys_close(int fd);
 int sys_mmap (int fd, void *addr);
 void sys_munmap (int mapping);
 
+void check_buffer (void *addr);
 
 static void syscall_handler (struct intr_frame *);
 tid_t sys_exec(char *cmd_line);
@@ -261,6 +262,7 @@ int sys_filesize(int fd){
 
 int sys_read(int fd, void *buffer, unsigned size) {
   check_user_memory_access(buffer);
+  //check_buffer (buffer);
   if ( fd == 0 ) {
     unsigned i = 0;
     for ( i = 0; i < size; i++) {
@@ -273,7 +275,6 @@ int sys_read(int fd, void *buffer, unsigned size) {
     return -1;
   }
   lock_acquire(&filesys_lock);
-//TODO printf("Error occrue here\n")
   int result = file_read(pf->file, buffer, size);
   lock_release(&filesys_lock);
   return result;
@@ -426,13 +427,24 @@ unsigned* check_and_get_arg (void* addr, int pos){
   return result;
 }
 
+void check_buffer (void* addr){
+  check_user_memory_access (addr);
+  struct s_page *sp = get_s_page (addr);
+  if (sp != NULL) {
+    if (!sp->is_load) sys_exit (-1);
+  } else {
+    sys_exit (-1);
+  }
+  return;
+}
+
 void check_user_memory_access(void* addr){
   if(addr == NULL || !is_user_vaddr(addr)){
     sys_exit(-1);
   } else {
     void *page = (void *) pagedir_get_page(thread_current()->pagedir, addr);
     if(!page) {
-      sys_exit(-1);
+//      sys_exit(-1);
     }
   }
   return;

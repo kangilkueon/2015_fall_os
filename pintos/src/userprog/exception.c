@@ -162,13 +162,13 @@ page_fault (struct intr_frame *f)
       bool success = load_segment_by_s_page (pg_round_down(fault_addr));
       if (success) {
         return;
-      }
-    } else {
-      uint32_t *kpage = palloc_get_page_with_frame(PAL_USER);
-      if (kpage != NULL) {
-        bool success = install_page (pg_round_down(fault_addr), kpage, true);
-        if (success)
-          return;
+      } else if(fault_addr >= f->esp - 32) {
+        uint32_t *kpage = palloc_get_page_with_frame(PAL_USER);
+        if (kpage != NULL) {
+          bool success = install_page (pg_round_down(fault_addr), kpage, true);
+          if (success)
+            return;
+        } 
       }
     }
   }
