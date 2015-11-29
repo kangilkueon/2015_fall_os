@@ -32,7 +32,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp, char **s
 tid_t
 process_execute (const char *file_name) 
 {
-enum intr_level old_level = intr_disable();
+  enum intr_level old_level = intr_disable();
   char *fn_copy;
   char *rfile_name;
   char *save_ptr;
@@ -78,7 +78,7 @@ enum intr_level old_level = intr_disable();
     palloc_free_page (fn_copy); 
   }
   palloc_free_page (rfile_name);
-intr_set_level(old_level);
+  intr_set_level(old_level);
   return tid;
 }
 

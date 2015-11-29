@@ -431,7 +431,7 @@ void check_buffer (void* addr){
   check_user_memory_access (addr);
   struct s_page *sp = get_s_page (addr);
   if (sp != NULL) {
-    if (!sp->is_load) sys_exit (-1);
+    //if (!sp->is_load) sys_exit (-1);
   } else {
     sys_exit (-1);
   }
@@ -444,7 +444,7 @@ void check_user_memory_access(void* addr){
   } else {
     void *page = (void *) pagedir_get_page(thread_current()->pagedir, addr);
     if(!page) {
-//      sys_exit(-1);
+      //sys_exit(-1);
     }
   }
   return;
